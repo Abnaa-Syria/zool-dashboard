@@ -1,0 +1,144 @@
+@import 'leaflet/dist/leaflet.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-grayscale-1: #ffffff;
+  --color-grayscale-2: #f9fafb;
+  --color-grayscale-3: #f3f4f6;
+  --color-grayscale-4: #e5e7eb;
+  --color-grayscale-8: #6b7280;
+  --color-grayscale-11: #18181b;
+  --color-grayscale-12: #09090b;
+}
+
+@layer base {
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: 'IBM Plex Sans Arabic', 'IBM Plex Sans', sans-serif;
+  }
+
+  body {
+    overscroll-behavior: none;
+    background-color: #e7fff1;
+    color: #0a1f17;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 22px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+@keyframes zg-radar-ping {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+/* Leaflet Map overrides for ZoolGo design system */
+.leaflet-container {
+  font-family: 'IBM Plex Sans Arabic', 'IBM Plex Sans', sans-serif !important;
+  background-color: #dbe8e1 !important;
+  z-index: 10 !important;
+}
+
+.leaflet-control-zoom {
+  border: none !important;
+  box-shadow: 0 4px 6px -1px rgba(14, 92, 62, 0.1) !important;
+  border-radius: 0.75rem !important;
+  overflow: hidden !important;
+}
+
+.leaflet-control-zoom a {
+  background-color: #ffffff !important;
+  color: #0a1f17 !important;
+  border-bottom: 1px solid #d5eee0 !important;
+  width: 36px !important;
+  height: 36px !important;
+  line-height: 36px !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background-color: #dbf4e5 !important;
+  color: #003b27 !important;
+}
+
+.leaflet-control-attribution {
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(4px) !important;
+  font-size: 11px !important;
+  padding: 2px 8px !important;
+  border-top-left-radius: 6px !important;
+  color: #574142 !important;
+}
+
+.leaflet-control-attribution a {
+  color: #226a4b !important;
+  text-decoration: underline !important;
+}
+
+.zg-custom-bus-div-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+.zg-bus-tooltip {
+  background: #ffffff !important;
+  border: 1px solid #d5eee0 !important;
+  border-radius: 0.75rem !important;
+  box-shadow: 0 10px 15px -3px rgba(14, 92, 62, 0.12) !important;
+  padding: 0 !important;
+}
+
+.zg-bus-tooltip::before {
+  border-top-color: #ffffff !important;
+}
+
+/* Print Media Styles */
+@media print {
+  @page {
+    size: auto;
+    margin: 8mm;
+  }
+
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .no-print {
+    display: none !important;
+    visibility: hidden !important;
+  }
+}
+
+
