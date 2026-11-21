@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/utils';
 import { SearchInput } from '../../components/ui/Input';
+import { useAuth } from '../../features/auth/auth-context';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -23,6 +24,13 @@ export const Topbar: React.FC<TopbarProps> = ({
   lastUpdated = 'مزامنة الخوادم: نشطة',
 }) => {
   const [searchQuery, setSearchQuery] = React.useState('');
+  const { admin, logout } = useAuth();
+  const initials = (admin?.displayName ?? '?')
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w.charAt(0))
+    .join('');
+  const phone = admin?.identities.find((i) => i.type === 'PHONE')?.value;
 
   return (
     <header
@@ -127,15 +135,19 @@ export const Topbar: React.FC<TopbarProps> = ({
               className="flex items-center gap-space-xs p-1 rounded-full focus:outline-none focus:ring-2 focus:ring-secondary/40 transition-transform active:scale-95"
             >
               <div className="w-8 h-8 rounded-full bg-secondary-container text-secondary font-bold flex items-center justify-center text-xs ring-2 ring-surface-container-high shadow-xs">
-                أس
+                {initials}
               </div>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56 p-2 text-right">
             <div className="px-2 py-1.5 border-b border-outline-variant/30 mb-1">
-              <span className="text-xs font-bold block text-on-surface">أحمد السر</span>
-              <span className="text-[11px] text-on-surface-variant block">المشرف العام (Super Admin)</span>
-              <span className="text-[10px] text-outline block mt-0.5 font-mono">persona@zoolgo.sd</span>
+              <span className="text-xs font-bold block text-on-surface">{admin?.displayName}</span>
+              <span className="text-[11px] text-on-surface-variant block">
+                {admin?.roles.map((r) => r.name).join('، ') || '—'}
+              </span>
+              <span className="text-[10px] text-outline block mt-0.5 font-mono" dir="ltr">
+                {phone ?? admin?.employeeCode}
+              </span>
             </div>
             <DropdownMenuItem onClick={() => alert('إعدادات الحساب الإداري')}>
               <span className="material-symbols-outlined text-[16px]">manage_accounts</span>
@@ -146,12 +158,9 @@ export const Topbar: React.FC<TopbarProps> = ({
               <span>سجل الأمان</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              destructive
-              onClick={() => alert('تنبيه: هذا الحساب يمثل هوية محاكاة للمشرف العام في بيئة التطوير.')}
-            >
+            <DropdownMenuItem destructive onClick={() => void logout()}>
               <span className="material-symbols-outlined text-[16px]">logout</span>
-              <span>تسجيل الخروج (محاكاة)</span>
+              <span>تسجيل الخروج</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

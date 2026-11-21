@@ -4,6 +4,7 @@ import { cn } from '../../lib/utils';
 import { SimpleTooltip } from '../../components/ui/Tooltip';
 
 import { navigationConfig } from './navigationConfig';
+import { useAuth } from '../../features/auth/auth-context';
 
 export interface SidebarProps {
   isCollapsed: boolean;
@@ -19,6 +20,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCloseMobile,
 }) => {
   const location = useLocation();
+  const { can } = useAuth();
+  const sections = navigationConfig
+    .map((section) => ({ ...section, items: section.items.filter((item) => !item.permission || can(item.permission)) }))
+    .filter((section) => section.items.length > 0);
 
   const sidebarContent = (
     <div className="flex flex-col h-full justify-between overflow-y-auto overflow-x-hidden text-right select-none">
@@ -89,7 +94,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Navigation Sections */}
       <div className="flex-1 py-space-sm px-space-xs space-y-space-md">
-        {navigationConfig.map((section, sIdx) => (
+        {sections.map((section, sIdx) => (
           <div key={sIdx} className="space-y-1">
             {!isCollapsed && (
               <div className="text-[11px] font-bold text-on-surface-variant/80 px-space-sm py-1 uppercase tracking-wider">
@@ -127,6 +132,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       {!isCollapsed && <span>{item.name}</span>}
                     </div>
 
+                    {!isCollapsed && item.data === 'mock' && (
+                      <span
+                        title="هذه الصفحة ما زالت تعرض بيانات تجريبية"
+                        className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-surface-container-high text-on-surface-variant"
+                      >
+                        تجريبي
+                      </span>
+                    )}
                     {!isCollapsed && item.badge && (
                       <span
                         className={cn(

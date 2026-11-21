@@ -1,5 +1,7 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AppShell } from '../shell/AppShell';
+import { LoginPage } from '../../features/auth/LoginPage';
+import { RequireAuth } from '../../features/auth/RequireAuth';
 import { OverviewPage } from '../../features/overview/pages/OverviewPage';
 import { LiveTrackingPage } from '../../features/tracking/pages/LiveTrackingPage';
 import { VehicleDetailsPage } from '../../features/tracking/pages/VehicleDetailsPage';
@@ -31,9 +33,14 @@ import { SettlementsPage } from '../../features/settlements/pages/SettlementsPag
 import { GeneralSettingsPage } from '../../features/admin/pages/GeneralSettingsPage';
 
 export const router = createBrowserRouter([
+  { path: '/login', element: <LoginPage /> },
   {
     path: '/',
-    element: <AppShell />,
+    element: (
+      <RequireAuth>
+        <AppShell />
+      </RequireAuth>
+    ),
     children: [
       {
         index: true,

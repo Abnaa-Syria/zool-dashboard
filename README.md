@@ -10,10 +10,17 @@ Central administration dashboard for ZoolGo (لوحة الإدارة المرك�
 
 ## Run
 
+The dashboard talks to the ZoolGo API. Start the backend first (`zool-go-backend`: `npm run dev`, port 4000), then:
+
 ```bash
 npm ci
-npm run dev        # http://localhost:5173
+cp .env.example .env   # optional; defaults: VITE_API_BASE_URL=/api/v1, proxy target http://localhost:4000
+npm run dev            # http://localhost:5173 — Vite proxies /api to the backend
 ```
+
+Sign in with an admin phone (dev seed Super Admin: `+249900000001`). In development the OTP is shown on the login screen.
+
+Auth model: access token in memory only; refresh token is an HttpOnly cookie restored on reload; 401 → one shared refresh → retry (`src/lib/api/client.ts`). Pages still on fixtures are tagged **تجريبي** in the sidebar and show a banner.
 
 ## Scripts
 
