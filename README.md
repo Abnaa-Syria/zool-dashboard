@@ -39,4 +39,4 @@ src/
 
 ## Workflow
 
-Branch → PR to `main` → CI green (`.github/workflows/ci.yml`: lint, typecheck, tests, build) → merge.
+Commit and push directly to `main`. Run `npm run lint && npx tsc -b && npm test` before pushing; CI (`.github/workflows/ci.yml`) re-runs lint, typecheck, tests and build on every push.
