@@ -1,4 +1,4 @@
-import type { Booking, BookingsMetrics } from '../types/booking';
+import type { Booking } from '../types/booking';
 
 export const mockBookings: Booking[] = [
   // 1. Customer direct booking with ticket sync failure (Stitch _5 & _6)
@@ -926,13 +926,3 @@ export const mockBookings: Booking[] = [
     ],
   },
 ];
-
-export const mockInitialBookingsMetrics: BookingsMetrics = {
-  totalBookings: 14820,
-  totalRevenueSdg: 5187000,
-  confirmedCount: 11240,
-  pendingPaymentCount: 1180,
-  ticketIssueFailedCount: 14,
-  brokerVolumePercent: 42.5,
-  customerVolumePercent: 57.5,
-};

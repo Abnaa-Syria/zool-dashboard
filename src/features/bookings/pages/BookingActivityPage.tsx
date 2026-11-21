@@ -1,183 +1,121 @@
 import * as React from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { useBooking } from '../hooks/useBookings';
-import { BookingActivityTimeline } from '../components/BookingActivityTimeline';
-import { FinancialLedgerTable } from '../components/FinancialLedgerTable';
+import { Link, useParams } from 'react-router-dom';
+import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
+import { Badge } from '../../../components/ui/Badge';
+import { EmptyState, ErrorState } from '../../../components/ui/EmptyState';
+import { PageHeader } from '../../../components/ui/PageHeader';
+import { Skeleton } from '../../../components/ui/Skeleton';
+import { errorMessage } from '../../../lib/api/errors';
+import { formatDateTime } from '../../../lib/dates';
+import { formatSdg } from '../../../lib/money';
+import { useAuth } from '../../auth/auth-context';
+import {
+  AUDIT_ACTION_LABEL,
+  BOOKING_STATUS_LABEL,
+  bookingRefLabel,
+  bookingStatusVariant,
+  useAdminBooking,
+  useBookingAuditLogs,
+  type AuditLogEntry,
+} from '../api';
+
+/** Readable lines for the metadata keys the bookings module writes; anything else is shown raw. */
+function describeMetadata(entry: AuditLogEntry): string[] {
+  const m = entry.metadata ?? {};
+  const lines: string[] = [];
+  const num = (k: string) => (typeof m[k] === 'number' ? (m[k] as number) : undefined);
+  if (typeof m.reason === 'string') lines.push(`السبب: ${m.reason}`);
+  if (Array.isArray(m.seatLabels)) lines.push(`المقاعد: ${m.seatLabels.join('، ')}`);
+  const total = num('totalAmount') ?? num('refundedAmountMinor') ?? num('refundedAmount');
+  if (total !== undefined) lines.push(`${entry.action.startsWith('booking.cancelled') ? 'المبلغ المُعاد' : 'المبلغ'}: ${formatSdg(total)}`);
+  const commission = num('commissionAmount') ?? num('commissionClawedBack');
+  if (commission !== undefined) lines.push(`${entry.action.startsWith('booking.cancelled') ? 'العمولة المستردة' : 'العمولة'}: ${formatSdg(commission)}`);
+  const balance = num('balanceAfter');
+  if (balance !== undefined) lines.push(`رصيد المحفظة بعدها: ${formatSdg(balance)}`);
+  if (typeof m.channel === 'string') lines.push(`قناة الإرسال: ${m.channel}`);
+  if (typeof m.status === 'string') lines.push(`الحالة: ${m.status}`);
+  return lines;
+}
+
+function actorLabel(entry: AuditLogEntry): string {
+  if (entry.actorAdminId) return `مسؤول (${entry.actorAdminId.slice(-8)})`;
+  const m = entry.metadata ?? {};
+  if (typeof m.employeeId === 'string') return `موظف المكتب (${m.employeeId.slice(-8)})`;
+  return 'النظام';
+}
+
+const AuditTrail: React.FC<{ bookingId: string }> = ({ bookingId }) => {
+  const logs = useBookingAuditLogs(bookingId, true);
+  if (logs.isLoading) return <Skeleton className="h-64 rounded-xl" />;
+  if (logs.isError) return <ErrorState title="تعذّر تحميل سجل التدقيق" message={errorMessage(logs.error)} onRetry={() => logs.refetch()} />;
+  const entries = [...(logs.data ?? [])].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  if (entries.length === 0) return <EmptyState title="لا توجد أحداث مسجلة لهذا الحجز" icon="history" />;
+
+  return (
+    <ol className="relative border-s border-outline-variant/50 ms-3 space-y-space-md">
+      {entries.map((e) => (
+        <li key={e.id} className="ms-6">
+          <span className="absolute -start-1.5 mt-1.5 h-3 w-3 rounded-full bg-secondary" aria-hidden />
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold text-on-surface">{AUDIT_ACTION_LABEL[e.action] ?? e.action}</span>
+            <span className="text-xs text-on-surface-variant">{formatDateTime(e.createdAt)}</span>
+          </div>
+          <div className="text-xs text-on-surface-variant mt-0.5">بواسطة: {actorLabel(e)}</div>
+          {describeMetadata(e).length > 0 && (
+            <ul className="mt-1 text-sm text-on-surface space-y-0.5">
+              {describeMetadata(e).map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          )}
+          {e.requestId && (
+            <div className="text-[11px] text-on-surface-variant font-mono mt-1" dir="ltr">req {e.requestId}</div>
+          )}
+        </li>
+      ))}
+    </ol>
+  );
+};
 
 export const BookingActivityPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { data: booking, isLoading, isError } = useBooking(id);
-
-  if (isLoading) {
-    return (
-      <div className="p-8 flex flex-col items-center justify-center min-h-[400px]">
-        <div className="w-10 h-10 border-4 border-emerald-200 border-t-emerald-700 rounded-full animate-spin"></div>
-        <span className="text-xs font-semibold text-slate-500 mt-3">جاري تحميل سجل التدقيق المالي...</span>
-      </div>
-    );
-  }
-
-  if (isError || !booking) {
-    return (
-      <div className="p-8 flex flex-col items-center justify-center min-h-[400px] text-center">
-        <h2 className="text-lg font-bold text-slate-900">لم يتم العثور على الحجز</h2>
-        <Link
-          to="/bookings"
-          className="mt-4 px-4 py-2 rounded-lg bg-emerald-700 text-white text-xs font-bold"
-        >
-          العودة للحجوزات
-        </Link>
-      </div>
-    );
-  }
-
-  const isBroker = booking.source === 'broker_office';
+  const { can } = useAuth();
+  const booking = useAdminBooking(id);
+  const b = booking.data;
+  const ref = b ? bookingRefLabel(b) : undefined;
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      {/* Breadcrumb & Navigation */}
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
-          <Link to="/bookings" className="hover:text-emerald-800 transition-colors">
-            الحجوزات والتذاكر
-          </Link>
-          <span>/</span>
-          <Link to={`/bookings/${booking.id}`} className="hover:text-emerald-800 transition-colors">
-            تفاصيل الحجز {booking.id}
-          </Link>
-          <span>/</span>
-          <span className="text-emerald-800 font-bold">سجل النشاط والتدقيق المالي</span>
-        </div>
+    <div className="flex flex-col w-full pb-space-xl gap-space-lg">
+      <Breadcrumbs
+        items={[
+          { label: 'الرئيسية والعمليات', path: '/overview' },
+          { label: 'الحجوزات والتذاكر', path: '/bookings' },
+          { label: ref ?? 'تفاصيل الحجز', path: `/bookings/${id}` },
+          { label: 'سجل النشاط' },
+        ]}
+      />
+      <PageHeader
+        title={ref ? `سجل نشاط الحجز ${ref}` : 'سجل نشاط الحجز'}
+        subtitle="الأحداث المسجلة في سجل التدقيق لهذا الحجز."
+        badge={b ? <Badge variant={bookingStatusVariant(b.status)}>{BOOKING_STATUS_LABEL[b.status]}</Badge> : undefined}
+        actions={<Link to={`/bookings/${id}`} className="text-sm text-secondary">العودة إلى تفاصيل الحجز</Link>}
+      />
 
-        {/* Page Title & Action Controls */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mt-1">
-          <div className="flex flex-col gap-1">
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-                سجل الحجز والتدقيق المالي
-              </h1>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 text-xs font-mono font-bold border border-emerald-200">
-                <span className="material-symbols-outlined text-sm">verified</span>
-                <span>{booking.id}</span>
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">
-                <span className="material-symbols-outlined text-sm">
-                  {isBroker ? 'storefront' : 'smartphone'}
-                </span>
-                <span>
-                  المصدر: {isBroker ? `مكتب وسيط (${booking.brokerMeta?.brokerName})` : 'تطبيق العميل'}
-                </span>
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 max-w-3xl">
-              التتبع الزمني التراكمي لجميع العمليات الإدارية وحركات المحفظة والتسويات المرتبطة بالحجز {booking.id}
-            </p>
-          </div>
+      {booking.isError && (
+        <ErrorState title="تعذّر تحميل الحجز" message={errorMessage(booking.error)} onRetry={() => booking.refetch()} />
+      )}
 
-          <div className="flex items-center gap-2 self-start lg:self-center shrink-0">
-            <Link
-              to={`/bookings/${booking.id}`}
-              className="inline-flex items-center gap-1.5 px-3.5 h-9 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-all shadow-xs"
-            >
-              <span className="material-symbols-outlined text-base">arrow_forward</span>
-              <span>العودة إلى تفاصيل الحجز</span>
-            </Link>
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="inline-flex items-center gap-1.5 px-4 h-9 rounded-lg bg-[#8E1B32] text-white hover:bg-[#6d001e] text-xs font-bold transition-all shadow-xs"
-            >
-              <span className="material-symbols-outlined text-base">print</span>
-              <span>تصدير تقرير التدقيق (PDF)</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Overview Stats Bento (Matching Stitch _8) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Ticket Value */}
-        <div className="p-4 rounded-xl bg-white shadow-sm border border-slate-100 flex flex-col justify-between relative overflow-hidden">
-          <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
-            <span>قيمة التذكرة المخصومة</span>
-            <span className="material-symbols-outlined text-lg text-emerald-800">receipt_long</span>
-          </div>
-          <div className="mt-2">
-            <div className="text-2xl font-mono font-bold text-slate-900 tracking-tight">
-              {booking.totalAmount.toFixed(2)}{' '}
-              <span className="text-xs font-normal text-slate-500">ج.س</span>
-            </div>
-            <div className="flex items-center gap-1 text-emerald-700 text-[11px] font-semibold mt-1">
-              <span className="material-symbols-outlined text-xs">check_circle</span>
-              <span>حركة مالية قطعية ومثبتة</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 2: Broker Accrual */}
-        <div className="p-4 rounded-xl bg-white shadow-sm border border-slate-100 flex flex-col justify-between relative overflow-hidden">
-          <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
-            <span>عمولة الوكالة المستحقة</span>
-            <span className="material-symbols-outlined text-lg text-emerald-700">payments</span>
-          </div>
-          <div className="mt-2">
-            <div className="text-2xl font-mono font-bold text-emerald-700 tracking-tight">
-              {booking.brokerMeta ? `+${booking.brokerMeta.accruedCommissionAmount.toFixed(2)}` : '0.00'}{' '}
-              <span className="text-xs font-normal text-slate-500">ج.س</span>
-            </div>
-            <div className="flex items-center gap-1 text-slate-500 text-[11px] font-semibold mt-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-              <span>
-                {booking.brokerMeta
-                  ? `دورة التسوية التراكمية ${booking.brokerMeta.settlementCycleId}`
-                  : 'غير خاضع لعمولة مكاتب'}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 3: Audit Health */}
-        <div className="p-4 rounded-xl bg-emerald-900 text-white shadow-sm flex flex-col justify-between relative overflow-hidden">
-          <div className="flex items-center justify-between text-emerald-200 text-xs font-semibold">
-            <span>حالة التدقيق الآلي</span>
-            <span className="material-symbols-outlined text-lg text-emerald-300">policy</span>
-          </div>
-          <div className="mt-2">
-            <div className="text-2xl font-bold text-white leading-none">100% متطابق</div>
-            <div className="flex items-center gap-1 text-emerald-200 text-[11px] font-semibold mt-1.5">
-              <span className="material-symbols-outlined text-xs">lock_clock</span>
-              <span>لا توجد أي فروقات حسابية</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 4: Ledger Chain Hash */}
-        <div className="p-4 rounded-xl bg-white shadow-sm border border-slate-100 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
-            <span>المعرف المشفر المرجعي</span>
-            <span className="material-symbols-outlined text-lg text-slate-400">fingerprint</span>
-          </div>
-          <div className="mt-2">
-            <div className="font-mono text-xs font-bold text-slate-900 truncate tracking-wider" dir="ltr">
-              ZL-AUD-{booking.id.replace('ZL-', '')}-TX
-            </div>
-            <div className="flex items-center gap-1 text-slate-500 text-[11px] font-medium mt-1">
-              <span className="material-symbols-outlined text-xs text-emerald-700">encrypted</span>
-              <span>سجل محاسبي غير قابل للتعديل</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Dual-Panel Content: Timeline & Financial Trace */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-        <div className="xl:col-span-7">
-          <BookingActivityTimeline events={booking.activityLog} />
-        </div>
-        <div className="xl:col-span-5">
-          <FinancialLedgerTable booking={booking} entries={booking.ledgerEntries} />
-        </div>
-      </div>
+      <section className="bg-surface-container-lowest border border-surface-container-high rounded-xl p-space-md">
+        {!id ? null : can('audit.view') ? (
+          <AuditTrail bookingId={id} />
+        ) : (
+          <EmptyState
+            title="سجل التدقيق غير متاح"
+            description="عرض سجل نشاط الحجز يتطلب صلاحية «audit.view». تواصل مع مسؤول النظام لمنحك الصلاحية."
+            icon="lock"
+          />
+        )}
+      </section>
     </div>
   );
 };

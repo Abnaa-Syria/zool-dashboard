@@ -6,8 +6,6 @@ export type PaymentStatus = 'paid' | 'pending_verification' | 'refunded' | 'fail
 
 export type TicketIssuanceStatus = 'issued' | 'pending_issue' | 'issue_failed' | 'cancelled';
 
-export type DateFilterType = 'booking_created' | 'trip_departure';
-
 export interface Passenger {
   id: string;
   name: string;
@@ -173,33 +171,4 @@ export interface Booking {
     description: string;
     actionRequired?: string;
   };
-}
-
-export interface BookingsFilterState {
-  searchQuery: string;
-  source: string; // 'all' | 'direct_customer' | 'broker_office'
-  bookingStatus: string; // 'all' | 'confirmed' | 'pending' | 'cancelled'
-  paymentStatus: string; // 'all' | 'paid' | 'pending_verification' | 'refunded'
-  ticketStatus: string; // 'all' | 'issued' | 'issue_failed' | 'pending_issue'
-  carrierId: string; // 'all' | carrierId
-  brokerId: string; // 'all' | brokerId
-  routeId: string; // 'all' | routeId
-  dateFilterType: DateFilterType; // 'booking_created' | 'trip_departure'
-  datePreset: 'all' | 'today' | '7days' | '30days' | 'custom';
-  startDate?: string;
-  endDate?: string;
-  sortBy: 'createdAt' | 'departureTime' | 'totalAmount' | 'passengerCount';
-  sortOrder: 'asc' | 'desc';
-  page: number;
-  pageSize: number;
-}
-
-export interface BookingsMetrics {
-  totalBookings: number;
-  totalRevenueSdg: number;
-  confirmedCount: number;
-  pendingPaymentCount: number;
-  ticketIssueFailedCount: number;
-  brokerVolumePercent: number;
-  customerVolumePercent: number;
 }

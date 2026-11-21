@@ -1,549 +1,420 @@
-import React, { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { useAdminUser } from '../hooks/useAdmin';
+import * as React from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
+import { Badge } from '../../../components/ui/Badge';
+import { Button } from '../../../components/ui/Button';
+import { EmptyState, ErrorState } from '../../../components/ui/EmptyState';
+import { Input } from '../../../components/ui/Input';
+import { Skeleton } from '../../../components/ui/Skeleton';
+import { formatDateTime } from '../../../lib/dates';
+import { useAuth } from '../../auth/auth-context';
+import {
+  adminErrorMessage,
+  useAdmin,
+  useAdminSessions,
+  useAuditLogs,
+  useRevokeAllSessions,
+  useRevokeSession,
+  useRoles,
+  useSetAdminRoles,
+  useUpdateAdminProfile,
+  useUpdateAdminStatus,
+  type AdminUser,
+} from '../api';
+import { AUDIT_ACTION_LABEL, RESOURCE_TYPE_LABEL, label } from '../labels';
+import { AdminStatusBadge, ConfirmDialog, InlineError, Section } from '../components/AdminUi';
+
+const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label: l, children }) => (
+  <div className="flex flex-col gap-0.5">
+    <span className="text-[11px] text-on-surface-variant">{l}</span>
+    <span className="text-sm text-on-surface">{children}</span>
+  </div>
+);
 
 export const AdminMemberDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const adminId = id || 'ADM-004';
-  const {
-    user,
-    updateUser,
-    terminateSession,
-    terminateAllSessions,
-    freezeAccount,
-    unfreezeAccount,
-  } = useAdminUser(adminId);
+  const admin = useAdmin(id);
 
-  const [notification, setNotification] = useState<string | null>(null);
+  return (
+    <div className="flex flex-col w-full pb-space-xl gap-space-lg">
+      <Breadcrumbs items={[{ label: 'إدارة النظام' }, { label: 'فريق الإدارة', path: '/admin/team' }, { label: admin.data?.displayName ?? 'تفاصيل المشرف' }]} />
+      {admin.isLoading ? (
+        <div className="grid gap-space-md lg:grid-cols-2">
+          <Skeleton className="h-56 rounded-xl" />
+          <Skeleton className="h-56 rounded-xl" />
+        </div>
+      ) : admin.isError ? (
+        <ErrorState title="تعذّر تحميل بيانات المشرف" message={adminErrorMessage(admin.error)} onRetry={() => admin.refetch()} />
+      ) : admin.data ? (
+        <MemberDetails admin={admin.data} />
+      ) : null}
+    </div>
+  );
+};
 
-  const showNotice = (msg: string) => {
-    setNotification(msg);
-    setTimeout(() => setNotification(null), 3500);
-  };
+const MemberDetails: React.FC<{ admin: AdminUser }> = ({ admin }) => {
+  const { can, admin: me } = useAuth();
+  const isSelf = me?.id === admin.id;
 
-  if (!user) {
-    return (
-      <div className="p-space-xl text-center">
-        <h2 className="text-xl font-bold text-on-surface">لم يتم العثور على المشرف المطلوب ({adminId})</h2>
-        <Link to="/admin/team" className="text-secondary font-bold mt-4 inline-block">
-          العودة إلى قائمة فريق الإدارة
+  return (
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-space-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-bold text-lg">
+            {admin.displayName.trim().charAt(0)}
+          </div>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="font-headline-md text-headline-md font-bold text-on-surface">{admin.displayName}</h1>
+              <AdminStatusBadge status={admin.status} />
+              {admin.isBootstrap && <Badge variant="warning">مدير عام تأسيسي</Badge>}
+              {isSelf && <Badge variant="info">حسابك</Badge>}
+            </div>
+            <p className="text-xs text-on-surface-variant font-mono mt-0.5" dir="ltr">{admin.employeeCode}</p>
+          </div>
+        </div>
+        <Link to="/admin/team" className="text-sm text-secondary flex items-center gap-1">
+          <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+          العودة للفريق
         </Link>
       </div>
+
+      <div className="grid gap-space-md lg:grid-cols-2">
+        <ProfileSection admin={admin} canEdit={can('admins.update')} />
+        <AccessSection admin={admin} isSelf={isSelf} canSuspend={can('admins.suspend')} canRevoke={can('sessions.revoke')} />
+        <RolesSection admin={admin} canAssign={can('roles.assign')} canViewRoles={can('roles.view')} />
+        {can('sessions.view') && <SessionsSection adminId={admin.id} canRevoke={can('sessions.revoke')} />}
+      </div>
+
+      {can('audit.view') && <ActivitySection adminId={admin.id} />}
+    </>
+  );
+};
+
+const ProfileSection: React.FC<{ admin: AdminUser; canEdit: boolean }> = ({ admin, canEdit }) => {
+  const update = useUpdateAdminProfile();
+  const [editing, setEditing] = React.useState(false);
+  const [name, setName] = React.useState(admin.displayName);
+
+  const save = (e: React.FormEvent) => {
+    e.preventDefault();
+    update.mutate({ id: admin.id, displayName: name.trim() }, { onSuccess: () => setEditing(false) });
+  };
+
+  return (
+    <Section
+      title="الملف الشخصي"
+      actions={
+        canEdit && !editing ? (
+          <Button
+            size="sm"
+            variant="outline"
+            icon="edit"
+            onClick={() => {
+              setName(admin.displayName);
+              update.reset();
+              setEditing(true);
+            }}
+          >
+            تعديل الاسم
+          </Button>
+        ) : null
+      }
+    >
+      {editing && (
+        <form onSubmit={save} className="space-y-2">
+          <Input label="الاسم المعروض" value={name} onChange={(e) => setName(e.target.value)} minLength={2} maxLength={160} required autoFocus />
+          <InlineError message={update.isError ? adminErrorMessage(update.error) : null} />
+          <div className="flex gap-2 justify-end">
+            <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>
+              إلغاء
+            </Button>
+            <Button type="submit" size="sm" isLoading={update.isPending} disabled={name.trim().length < 2 || name.trim() === admin.displayName}>
+              حفظ
+            </Button>
+          </div>
+        </form>
+      )}
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="الرقم الوظيفي">
+          <span className="font-mono" dir="ltr">{admin.employeeCode}</span>
+        </Field>
+        {admin.identities.map((i) => (
+          <Field key={`${i.type}-${i.value}`} label={i.type === 'PHONE' ? `الهاتف${i.isPrimary ? ' (أساسي)' : ''}` : i.type}>
+            <span className="font-mono" dir="ltr">{i.value}</span>
+          </Field>
+        ))}
+        <Field label="آخر دخول">{formatDateTime(admin.lastLoginAt)}</Field>
+        <Field label="تاريخ الإنشاء">{formatDateTime(admin.createdAt)}</Field>
+        <Field label="آخر تحديث">{formatDateTime(admin.updatedAt)}</Field>
+      </div>
+      <p className="text-[11px] text-outline">يغيّر كل مشرف رقم هاتفه بنفسه عبر رمز تحقق؛ لا يمكن تعديله من هنا.</p>
+    </Section>
+  );
+};
+
+const AccessSection: React.FC<{ admin: AdminUser; isSelf: boolean; canSuspend: boolean; canRevoke: boolean }> = ({ admin, isSelf, canSuspend, canRevoke }) => {
+  const status = useUpdateAdminStatus();
+  const revokeAll = useRevokeAllSessions();
+  const [confirm, setConfirm] = React.useState<'status' | 'revoke' | null>(null);
+  const [notice, setNotice] = React.useState<string | null>(null);
+  const suspending = admin.status === 'ACTIVE';
+
+  if (!canSuspend && !canRevoke) return null;
+
+  return (
+    <Section title="الوصول والأمان">
+      <div className="space-y-3">
+        {canSuspend && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-outline-variant/40 p-3">
+            <div>
+              <p className="text-sm font-semibold">{suspending ? 'إيقاف الحساب' : 'إعادة تفعيل الحساب'}</p>
+              <p className="text-[11px] text-on-surface-variant">
+                {suspending ? 'يمنع الدخول وينهي كل الجلسات النشطة فورًا.' : 'يسمح للمشرف بتسجيل الدخول مجددًا.'}
+              </p>
+              {isSelf && suspending && <p className="text-[11px] text-error mt-1">لا يمكنك إيقاف حسابك الشخصي.</p>}
+              {admin.isBootstrap && suspending && !isSelf && (
+                <p className="text-[11px] mt-1 text-[#B45309]">حساب تأسيسي: يرفض الخادم إيقاف آخر مدير عام تأسيسي نشط.</p>
+              )}
+            </div>
+            <Button
+              size="sm"
+              variant={suspending ? 'danger' : 'secondary'}
+              icon={suspending ? 'block' : 'check_circle'}
+              disabled={isSelf && suspending}
+              onClick={() => {
+                status.reset();
+                setConfirm('status');
+              }}
+            >
+              {suspending ? 'إيقاف' : 'إعادة تفعيل'}
+            </Button>
+          </div>
+        )}
+        {canRevoke && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-outline-variant/40 p-3">
+            <div>
+              <p className="text-sm font-semibold">إنهاء كل الجلسات</p>
+              <p className="text-[11px] text-on-surface-variant">يُخرج المشرف من جميع الأجهزة دون إيقاف الحساب.</p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              icon="logout"
+              onClick={() => {
+                revokeAll.reset();
+                setConfirm('revoke');
+              }}
+            >
+              إنهاء الجلسات
+            </Button>
+          </div>
+        )}
+        {notice && <p className="text-xs text-secondary">{notice}</p>}
+      </div>
+
+      <ConfirmDialog
+        open={confirm === 'status'}
+        onOpenChange={(o) => !o && setConfirm(null)}
+        title={suspending ? `إيقاف ${admin.displayName}؟` : `إعادة تفعيل ${admin.displayName}؟`}
+        description={suspending ? 'سيُمنع المشرف من الدخول وتُنهى جميع جلساته فورًا. يمكن إعادة التفعيل لاحقًا.' : 'سيتمكن المشرف من تسجيل الدخول بصلاحيات أدواره الحالية.'}
+        confirmText={suspending ? 'تأكيد الإيقاف' : 'تأكيد التفعيل'}
+        danger={suspending}
+        isLoading={status.isPending}
+        error={status.isError ? adminErrorMessage(status.error) : null}
+        onConfirm={() =>
+          status.mutate(
+            { id: admin.id, status: suspending ? 'SUSPENDED' : 'ACTIVE' },
+            {
+              onSuccess: () => {
+                setConfirm(null);
+                setNotice(suspending ? 'تم إيقاف الحساب.' : 'تمت إعادة تفعيل الحساب.');
+              },
+            },
+          )
+        }
+      />
+      <ConfirmDialog
+        open={confirm === 'revoke'}
+        onOpenChange={(o) => !o && setConfirm(null)}
+        title="إنهاء كل الجلسات؟"
+        description={`سيُطلب من ${admin.displayName} تسجيل الدخول من جديد على كل الأجهزة.`}
+        confirmText="إنهاء الجلسات"
+        danger
+        isLoading={revokeAll.isPending}
+        error={revokeAll.isError ? adminErrorMessage(revokeAll.error) : null}
+        onConfirm={() =>
+          revokeAll.mutate(admin.id, {
+            onSuccess: (r) => {
+              setConfirm(null);
+              setNotice(r.revokedCount ? `تم إنهاء ${r.revokedCount} جلسة.` : 'لا توجد جلسات نشطة.');
+            },
+          })
+        }
+      />
+    </Section>
+  );
+};
+
+const RolesSection: React.FC<{ admin: AdminUser; canAssign: boolean; canViewRoles: boolean }> = ({ admin, canAssign, canViewRoles }) => {
+  const editable = canAssign && canViewRoles;
+  const roles = useRoles(editable);
+  const setRoles = useSetAdminRoles();
+  const current = React.useMemo(() => admin.roles.map((r) => r.id).sort(), [admin.roles]);
+  const [selected, setSelected] = React.useState<string[]>(current);
+  const [saved, setSaved] = React.useState(false);
+
+  const dirty = selected.length !== current.length || [...selected].sort().some((id, i) => id !== current[i]);
+
+  if (!editable) {
+    return (
+      <Section title="الأدوار">
+        <div className="flex flex-wrap gap-2">
+          {admin.roles.length ? admin.roles.map((r) => <Badge key={r.id} variant="secondary">{r.name}</Badge>) : <span className="text-sm text-outline">بدون أدوار</span>}
+        </div>
+        <p className="text-[11px] text-outline">تعديل الأدوار يتطلب صلاحيتي roles.assign و roles.view.</p>
+      </Section>
     );
   }
 
-  const isFrozen = user.status === 'restricted';
+  return (
+    <Section
+      title="الأدوار"
+      actions={
+        <div className="flex gap-2">
+          {dirty && (
+            <Button size="sm" variant="ghost" onClick={() => setSelected(current)}>
+              تراجع
+            </Button>
+          )}
+          <Button
+            size="sm"
+            icon="save"
+            disabled={!dirty || selected.length === 0}
+            isLoading={setRoles.isPending}
+            onClick={() => {
+              setSaved(false);
+              setRoles.mutate({ id: admin.id, roleIds: selected }, { onSuccess: () => setSaved(true) });
+            }}
+          >
+            حفظ الأدوار
+          </Button>
+        </div>
+      }
+    >
+      {roles.isLoading ? (
+        <Skeleton className="h-24" />
+      ) : roles.isError ? (
+        <ErrorState title="تعذّر تحميل الأدوار" message={adminErrorMessage(roles.error)} onRetry={() => roles.refetch()} />
+      ) : (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {(roles.data ?? [])
+            .filter((r) => r.isActive || current.includes(r.id))
+            .map((r) => (
+              <label key={r.id} className="flex items-start gap-2 rounded-lg border border-outline-variant/40 px-3 py-2 text-sm cursor-pointer hover:bg-surface-container-low">
+                <input
+                  type="checkbox"
+                  className="mt-1 accent-secondary"
+                  checked={selected.includes(r.id)}
+                  onChange={(e) => {
+                    setSaved(false);
+                    setSelected((ids) => (e.target.checked ? [...ids, r.id] : ids.filter((x) => x !== r.id)));
+                  }}
+                />
+                <span className="flex flex-col">
+                  <span className="font-medium flex items-center gap-1">
+                    {r.name}
+                    {r.isSystem && <Badge size="sm" variant="info">نظامي</Badge>}
+                    {!r.isActive && <Badge size="sm" variant="neutral">معطّل</Badge>}
+                  </span>
+                  <span className="text-[11px] text-outline">{r.permissions.length} صلاحية</span>
+                </span>
+              </label>
+            ))}
+        </div>
+      )}
+      {selected.length === 0 && <p className="text-[11px] text-error">يجب اختيار دور واحد على الأقل.</p>}
+      {admin.isBootstrap && <p className="text-[11px] text-[#B45309]">المدير العام التأسيسي يجب أن يحتفظ بدور Super Admin.</p>}
+      <InlineError message={setRoles.isError ? adminErrorMessage(setRoles.error) : null} />
+      {saved && !dirty && <p className="text-xs text-secondary">تم حفظ الأدوار.</p>}
+    </Section>
+  );
+};
+
+const SessionsSection: React.FC<{ adminId: string; canRevoke: boolean }> = ({ adminId, canRevoke }) => {
+  const sessions = useAdminSessions(adminId);
+  const revoke = useRevokeSession();
 
   return (
-    <div className="flex flex-col w-full min-h-screen">
-      <div className="w-full max-w-[1520px] mx-auto p-space-lg lg:p-space-xl space-y-space-lg">
-        {/* Top Breadcrumb & Return Action */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-space-md">
-          <nav aria-label="مسار التنقل" className="flex items-center gap-space-xs text-on-surface-variant font-label-md text-xs">
-            <Link to="/overview" className="hover:text-secondary transition-colors">
-              الرئيسية والعمليات
-            </Link>
-            <span className="material-symbols-outlined text-[16px] text-outline">chevron_left</span>
-            <span className="text-on-surface-variant">إدارة النظام والصلاحيات</span>
-            <span className="material-symbols-outlined text-[16px] text-outline">chevron_left</span>
-            <Link to="/admin/team" className="hover:text-secondary transition-colors">
-              فريق الإدارة
-            </Link>
-            <span className="material-symbols-outlined text-[16px] text-outline">chevron_left</span>
-            <span className="text-on-surface font-semibold bg-surface-container-high px-2.5 py-0.5 rounded-full">
-              ملف المشرف: {user.name} ({user.id})
-            </span>
-          </nav>
-
-          <Link
-            to="/admin/team"
-            className="inline-flex items-center gap-space-xs self-start md:self-auto px-3.5 py-2 rounded-lg bg-surface-container-lowest text-secondary font-label-lg text-xs font-bold shadow-sm hover:bg-surface-container transition-colors border border-surface-container-high"
-          >
-            <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-            <span>العودة إلى قائمة فريق الإدارة</span>
-          </Link>
-        </div>
-
-        {/* Floating Notification */}
-        {notification && (
-          <div className="p-3 bg-secondary-container text-on-secondary-container rounded-xl flex items-center justify-between font-label-md text-xs font-bold shadow-sm animate-in fade-in">
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-[18px]">verified</span>
-              <span>{notification}</span>
-            </div>
-            <button type="button" onClick={() => setNotification(null)}>
-              <span className="material-symbols-outlined text-[16px]">close</span>
-            </button>
-          </div>
-        )}
-
-        {/* Header Banner: Admin Persona & Core Actions */}
-        <div className="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm flex flex-col xl:flex-row xl:items-center justify-between gap-space-lg border border-surface-container-high/60">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-space-md">
-            {/* Avatar with Status Indicator */}
-            <div className="relative shrink-0">
-              <div className="w-20 h-20 rounded-xl bg-surface-container-high overflow-hidden shadow-sm flex items-center justify-center">
-                {user.avatarUrl ? (
-                  <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
-                ) : (
-                  <span className="font-headline-lg text-2xl font-bold text-secondary">
-                    {user.avatarInitials}
-                  </span>
-                )}
+    <Section title="الجلسات النشطة">
+      {sessions.isLoading ? (
+        <Skeleton className="h-24" />
+      ) : sessions.isError ? (
+        <ErrorState title="تعذّر تحميل الجلسات" message={adminErrorMessage(sessions.error)} onRetry={() => sessions.refetch()} />
+      ) : !sessions.data?.data.length ? (
+        <p className="text-sm text-outline py-4 text-center">لا توجد جلسات نشطة.</p>
+      ) : (
+        <ul className="divide-y divide-surface-container">
+          {sessions.data.data.map((s) => (
+            <li key={s.id} className="flex items-center justify-between gap-2 py-2">
+              <div className="min-w-0">
+                <p className="text-xs text-on-surface truncate" dir="ltr" title={s.userAgent ?? ''}>
+                  {s.userAgent ?? 'جهاز غير معروف'}
+                </p>
+                <p className="text-[11px] text-on-surface-variant">
+                  <span dir="ltr" className="font-mono">{s.ipAddress ?? '—'}</span> · بدأت {formatDateTime(s.createdAt)} · آخر استخدام {formatDateTime(s.lastUsedAt)}
+                </p>
               </div>
-              <span
-                className={`absolute -bottom-1.5 -left-1.5 w-5 h-5 rounded-full flex items-center justify-center shadow-md ring-2 ring-surface-container-lowest ${
-                  isFrozen ? 'bg-error text-on-error' : 'bg-secondary text-on-secondary'
-                }`}
-                title={isFrozen ? 'حساب مجمد' : 'متصل ونشط'}
-              >
-                {!isFrozen && <span className="w-2 h-2 rounded-full bg-secondary-fixed animate-ping"></span>}
-                {isFrozen && <span className="material-symbols-outlined text-[12px]">lock</span>}
-              </span>
-            </div>
-
-            {/* Identity & Role Badges */}
-            <div className="space-y-1">
-              <div className="flex flex-wrap items-center gap-space-xs">
-                <h1 className="font-headline-lg text-lg md:text-xl text-on-surface font-bold tracking-tight">
-                  {user.name}
-                </h1>
-                <span className="px-2.5 py-0.5 rounded-full bg-surface-container-high text-on-surface font-label-md text-xs font-mono font-bold">
-                  #{user.id}
-                </span>
-                <span
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-label-md text-xs font-semibold ${
-                    isFrozen
-                      ? 'bg-error-container text-on-error-container'
-                      : 'bg-secondary-container text-on-secondary-container'
-                  }`}
+              {canRevoke && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon="logout"
+                  isLoading={revoke.isPending && revoke.variables?.sessionId === s.id}
+                  onClick={() => revoke.mutate({ sessionId: s.id, adminId })}
                 >
-                  <span
-                    className={`w-2 h-2 rounded-full ${isFrozen ? 'bg-error' : 'bg-secondary'}`}
-                  ></span>
-                  {isFrozen ? 'حساب مقيد احترازياً' : 'حساب نشط ومعتمد'}
-                </span>
-              </div>
-              <p className="font-body-md text-xs text-on-surface-variant flex items-center gap-space-xs flex-wrap">
-                <span className="material-symbols-outlined text-[18px] text-secondary">verified_user</span>
-                <span className="font-bold text-on-surface">{user.arabicRoleTitle}</span>
-                <span className="text-outline">•</span>
-                <span>{user.workLocation}</span>
-              </p>
-            </div>
-          </div>
-
-          {/* Action Buttons Bar */}
-          <div className="flex flex-wrap items-center gap-space-sm">
-            <button
-              type="button"
-              onClick={() => {
-                const newPhone = prompt('أدخل رقم الهاتف الجديد للمشرف:', user.phone);
-                if (newPhone && newPhone.trim()) {
-                  updateUser({ phone: newPhone.trim() });
-                  showNotice('تم تحديث بيانات الاتصال بنجاح.');
-                }
-              }}
-              className="inline-flex items-center gap-1.5 h-10 px-4 rounded-lg bg-surface-container-low text-on-surface hover:bg-surface-container-high transition-colors font-label-lg text-xs font-bold cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-[18px]">edit_square</span>
-              <span>تعديل بيانات الحساب</span>
-            </button>
-
-            {isFrozen ? (
-              <button
-                type="button"
-                onClick={() => {
-                  unfreezeAccount();
-                  showNotice('تم رفع التجميد واستعادة صلاحيات المشرف.');
-                }}
-                className="inline-flex items-center gap-1.5 h-10 px-4 rounded-lg bg-secondary text-on-secondary hover:opacity-90 transition-colors font-label-lg text-xs font-bold cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-[18px]">lock_open</span>
-                <span>رفع التجميد وتفعيل الحساب</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  const reason = prompt('سبب تجميد الحساب:', 'تدقيق أمني احترازي دوري');
-                  if (reason) {
-                    freezeAccount(reason);
-                    showNotice('تم تجميد الحساب وإلغاء الجلسات النشطة فوراً.');
-                  }
-                }}
-                className="inline-flex items-center gap-1.5 h-10 px-4 rounded-lg bg-surface-container text-error hover:bg-error-container hover:text-on-error-container transition-colors font-label-lg text-xs font-bold cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-[18px]">lock_person</span>
-                <span>تجميد الحساب مؤقتاً</span>
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => {
-                if (confirm('هل أنت متأكد من إنهاء كافة الجلسات النشطة لهذا المشرف؟')) {
-                  terminateAllSessions();
-                  showNotice('تم إنهاء كافة الجلسات النشطة بنجاح.');
-                }
-              }}
-              className="inline-flex items-center gap-1.5 h-10 px-4 rounded-lg bg-primary-container text-on-primary hover:bg-primary shadow-sm transition-colors font-label-lg text-xs font-bold cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-[18px]">power_settings_new</span>
-              <span>إنهاء كافة الجلسات النشطة فوراً</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Two-Column Asymmetric Operational Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-lg items-start">
-          {/* Right Column: Profile Identity, Security Policies & Scopes (5 Cols) */}
-          <div className="lg:col-span-5 space-y-space-lg">
-            {/* 1. Administrator Identity Card */}
-            <div className="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm space-y-space-md border border-surface-container-high/60">
-              <div className="flex items-center justify-between pb-space-sm bg-surface-container-low px-space-md py-space-sm rounded-lg">
-                <div className="flex items-center gap-space-xs">
-                  <span className="material-symbols-outlined text-secondary text-[22px]">badge</span>
-                  <h2 className="font-headline-sm text-sm text-on-surface font-bold">
-                    البيانات الإدارية والوظيفية
-                  </h2>
-                </div>
-                <span className="font-label-md text-xs text-secondary bg-surface-container-lowest px-2 py-0.5 rounded font-mono">
-                  ZoolGo Internal
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-space-md pt-space-xs text-xs">
-                <div className="bg-surface-container-low p-space-sm rounded-lg">
-                  <div className="text-on-surface-variant font-medium">الاسم الرسمي الكامل</div>
-                  <div className="text-on-surface font-bold mt-1">{user.name}</div>
-                </div>
-                <div className="bg-surface-container-low p-space-sm rounded-lg">
-                  <div className="text-on-surface-variant font-medium">الرقم التعريفي (UID)</div>
-                  <div className="text-on-surface font-mono font-bold mt-1">{user.employeeCode}</div>
-                </div>
-                <div className="sm:col-span-2 bg-surface-container-low p-space-sm rounded-lg">
-                  <div className="text-on-surface-variant font-medium">المسمى الإشرافي المعتمد</div>
-                  <div className="text-on-surface font-semibold mt-1">{user.arabicRoleTitle}</div>
-                </div>
-                <div className="sm:col-span-2 bg-surface-container-low p-space-sm rounded-lg flex items-center justify-between">
-                  <div>
-                    <div className="text-on-surface-variant font-medium">البريد الإلكتروني المهني</div>
-                    <div className="text-on-surface font-mono font-medium mt-1">{user.email}</div>
-                  </div>
-                  <span className="material-symbols-outlined text-secondary text-[20px]">
-                    mark_email_read
-                  </span>
-                </div>
-                <div className="bg-surface-container-low p-space-sm rounded-lg flex items-center justify-between">
-                  <div>
-                    <div className="text-on-surface-variant font-medium">هاتف الاتصال المشفر</div>
-                    <div className="text-on-surface font-mono font-medium mt-1" dir="ltr">
-                      {user.phone}
-                    </div>
-                  </div>
-                  <span className="material-symbols-outlined text-secondary text-[20px]">call</span>
-                </div>
-                <div className="bg-surface-container-low p-space-sm rounded-lg">
-                  <div className="text-on-surface-variant font-medium">تاريخ مباشرة العمل</div>
-                  <div className="text-on-surface font-medium mt-1">{user.joinedDate}</div>
-                </div>
-              </div>
-            </div>
-
-            {/* 2. Security & Zero-Trust Profile */}
-            <div className="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm space-y-space-md border border-surface-container-high/60">
-              <div className="flex items-center justify-between pb-space-sm bg-surface-container-low px-space-md py-space-sm rounded-lg">
-                <div className="flex items-center gap-space-xs">
-                  <span className="material-symbols-outlined text-secondary text-[22px]">security</span>
-                  <h2 className="font-headline-sm text-sm text-on-surface font-bold">
-                    إعدادات الأمان وسياسة الوصول
-                  </h2>
-                </div>
-                <span className="font-label-md text-xs text-on-secondary-container bg-secondary-container px-2 py-0.5 rounded-full font-bold">
-                  Tier-1 Cleared
-                </span>
-              </div>
-
-              <div className="space-y-space-sm text-xs">
-                {/* 2FA */}
-                <div className="p-space-sm bg-surface-container-low rounded-lg flex items-center justify-between">
-                  <div className="flex items-center gap-space-sm">
-                    <div className="w-8 h-8 rounded-lg bg-surface-container-highest text-secondary flex items-center justify-center">
-                      <span className="material-symbols-outlined text-[18px]">phonelink_lock</span>
-                    </div>
-                    <div>
-                      <div className="font-bold text-on-surface">المصادقة الثنائية (2FA)</div>
-                      <div className="text-[11px] text-on-surface-variant">{user.twoFactorLabel}</div>
-                    </div>
-                  </div>
-                  <span className="px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-bold text-[10px]">
-                    مفعل ونشط
-                  </span>
-                </div>
-
-                {/* IP Whitelist */}
-                <div className="p-space-sm bg-surface-container-low rounded-lg space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-space-sm">
-                      <div className="w-8 h-8 rounded-lg bg-surface-container-highest text-secondary flex items-center justify-center">
-                        <span className="material-symbols-outlined text-[18px]">lan</span>
-                      </div>
-                      <div>
-                        <div className="font-bold text-on-surface">نطاق الآي بي المسموح (IP Whitelist)</div>
-                        <div className="text-[11px] text-on-surface-variant">
-                          مقيد بشبكة بنك الخرطوم ومكتب ZoolGo
-                        </div>
-                      </div>
-                    </div>
-                    <span className="material-symbols-outlined text-secondary text-[18px]">verified</span>
-                  </div>
-                  <div className="bg-surface-container-lowest px-space-sm py-1 rounded text-left font-mono text-[11px] text-on-surface-variant border border-surface-container" dir="ltr">
-                    CIDR: {user.ipWhitelist ? user.ipWhitelist.join(' | ') : '196.29.112.0/24'}
-                  </div>
-                </div>
-
-                {/* Approved Device */}
-                <div className="p-space-sm bg-surface-container-low rounded-lg flex items-center justify-between">
-                  <div className="flex items-center gap-space-sm">
-                    <div className="w-8 h-8 rounded-lg bg-surface-container-highest text-secondary flex items-center justify-center">
-                      <span className="material-symbols-outlined text-[18px]">laptop_mac</span>
-                    </div>
-                    <div>
-                      <div className="font-bold text-on-surface">بصمة الجهاز المصرح به</div>
-                      <div className="text-[11px] text-on-surface-variant">
-                        {user.approvedDevice || 'MacBook Pro M2 (Chrome 130 Enterprise)'}
-                      </div>
-                    </div>
-                  </div>
-                  <span className="px-2 py-0.5 rounded bg-surface-container-high text-on-surface font-mono text-[10px] font-bold">
-                    Hardware ID
-                  </span>
-                </div>
-
-                {/* Password Policy */}
-                <div className="p-space-sm bg-surface-container-low rounded-lg space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-space-sm">
-                      <div className="w-8 h-8 rounded-lg bg-surface-container-highest text-secondary flex items-center justify-center">
-                        <span className="material-symbols-outlined text-[18px]">password</span>
-                      </div>
-                      <div>
-                        <div className="font-bold text-on-surface">صلاحية كلمة المرور</div>
-                        <div className="text-[11px] text-on-surface-variant">
-                          تم التحديث منذ {90 - user.passwordDaysRemaining} يوماً (الحد الأقصى 90 يوماً)
-                        </div>
-                      </div>
-                    </div>
-                    <span className="font-bold text-secondary text-[11px]">
-                      متبقي {user.passwordDaysRemaining} يوماً
-                    </span>
-                  </div>
-                  <div className="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden">
-                    <div
-                      className="bg-secondary h-full rounded-full transition-all"
-                      style={{ width: `${Math.round((user.passwordDaysRemaining / 90) * 100)}%` }}
-                    ></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* 3. Explicit Scopes & Restrictions Matrix */}
-            <div className="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm space-y-space-md border border-surface-container-high/60">
-              <div className="flex items-center justify-between pb-space-sm bg-surface-container-low px-space-md py-space-sm rounded-lg">
-                <div className="flex items-center gap-space-xs">
-                  <span className="material-symbols-outlined text-secondary text-[22px]">policy</span>
-                  <h2 className="font-headline-sm text-sm text-on-surface font-bold">
-                    مصفوفة الصلاحيات والحواجز
-                  </h2>
-                </div>
-                <span className="font-label-md text-xs text-secondary font-mono font-bold">
-                  RBAC Enforced
-                </span>
-              </div>
-
-              {/* Granted Capabilities */}
-              <div className="space-y-space-sm text-xs">
-                <div className="text-secondary font-bold flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-[16px]">check_circle</span>
-                  <span>الصلاحيات الممنوحة والمعتمدة</span>
-                </div>
-                <div className="space-y-1.5">
-                  {user.grantedCapabilities.map((cap, i) => (
-                    <div key={i} className="flex items-start gap-2 bg-surface-container-low p-2 rounded-lg">
-                      <span className="material-symbols-outlined text-secondary text-[16px] shrink-0 mt-0.5">
-                        verified
-                      </span>
-                      <span className="text-on-surface leading-relaxed">{cap}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Strict Prohibitions */}
-              <div className="space-y-space-sm pt-space-xs text-xs">
-                <div className="text-primary-container font-bold flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-[16px]">block</span>
-                  <span>القيود والموانع الصارمة (Zero Override)</span>
-                </div>
-                <div className="space-y-1.5">
-                  {user.strictRestrictions.map((res, i) => (
-                    <div
-                      key={i}
-                      className="flex items-start gap-2 bg-error-container/30 text-on-error-container p-2 rounded-lg border border-error/20"
-                    >
-                      <span className="material-symbols-outlined text-error text-[16px] shrink-0 mt-0.5">
-                        do_not_disturb_on
-                      </span>
-                      <span className="leading-relaxed">{res}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Left Column: Active Live Sessions & Forensic Audit Trail (7 Cols) */}
-          <div className="lg:col-span-7 space-y-space-lg">
-            {/* 1. Live Active Sessions Widget */}
-            <div className="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm space-y-space-md border border-surface-container-high/60">
-              <div className="flex items-center justify-between pb-space-sm bg-surface-container-low px-space-md py-space-sm rounded-lg">
-                <div className="flex items-center gap-space-xs">
-                  <span className="material-symbols-outlined text-secondary text-[22px]">devices</span>
-                  <h2 className="font-headline-sm text-sm text-on-surface font-bold">
-                    الجلسات الحية المتصلة الآن
-                  </h2>
-                </div>
-                <span className="px-2.5 py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-label-md text-xs font-bold">
-                  {user.activeSessions.length} جلسات نشطة
-                </span>
-              </div>
-
-              {user.activeSessions.length === 0 ? (
-                <div className="py-8 text-center text-on-surface-variant text-xs">
-                  <span className="material-symbols-outlined text-3xl mb-1 block">no_accounts</span>
-                  لا توجد جلسات عمل نشطة في الوقت الحالي لهذا المشرف.
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-space-md">
-                  {user.activeSessions.map((session) => (
-                    <div
-                      key={session.id}
-                      className="bg-surface-container-low rounded-xl p-space-md space-y-space-sm border border-surface-container-high/60"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-space-xs">
-                          <span
-                            className={`w-2.5 h-2.5 rounded-full ${
-                              session.isCurrent ? 'bg-secondary animate-pulse' : 'bg-surface-variant'
-                            }`}
-                          ></span>
-                          <span className="font-bold text-xs text-on-surface">{session.device}</span>
-                        </div>
-                        <span className="px-2 py-0.5 rounded bg-secondary-container text-on-secondary-container font-label-md text-[10px] font-bold">
-                          {session.lastActive}
-                        </span>
-                      </div>
-
-                      <div className="space-y-1 text-xs text-on-surface-variant">
-                        <div className="flex items-center justify-between">
-                          <span>الموقع الجغرافي:</span>
-                          <span className="text-on-surface font-medium">{session.location}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span>عنوان الآي بي:</span>
-                          <span className="font-mono text-on-surface" dir="ltr">
-                            {session.ipAddress}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span>البيئة والنظام:</span>
-                          <span className="text-on-surface font-mono text-[11px]">
-                            {session.browser} / {session.os}
-                          </span>
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          terminateSession(session.id);
-                          showNotice(`تم إنهاء الجلسة (${session.device}) بنجاح.`);
-                        }}
-                        className="w-full mt-2 py-1.5 rounded-lg bg-surface-container text-primary-container font-label-md text-xs font-bold hover:bg-error-container hover:text-on-error-container transition-colors cursor-pointer"
-                      >
-                        إنهاء هذه الجلسة
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                  إنهاء
+                </Button>
               )}
-            </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      <InlineError message={revoke.isError ? adminErrorMessage(revoke.error) : null} />
+    </Section>
+  );
+};
 
-            {/* 2. Administrative Activity Audit Trail */}
-            <div className="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm space-y-space-md border border-surface-container-high/60">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-space-sm pb-space-sm bg-surface-container-low px-space-md py-space-sm rounded-lg">
-                <div className="flex items-center gap-space-xs">
-                  <span className="material-symbols-outlined text-secondary text-[22px]">history_edu</span>
-                  <div>
-                    <h2 className="font-headline-sm text-sm text-on-surface font-bold">
-                      سجل الإجراءات الحساسة والقرارات الإدارية
-                    </h2>
-                    <p className="font-body-sm text-[11px] text-on-surface-variant">
-                      سجل تدقيق زمني مشفر وموقع رقمياً (Audit Trail)
-                    </p>
-                  </div>
-                </div>
-                <span className="font-label-md text-xs text-on-surface-variant bg-surface-container px-2 py-1 rounded">
-                  {user.auditTrail.length} عمليات موثقة
-                </span>
-              </div>
-
-              <div className="space-y-3">
-                {user.auditTrail.map((log) => (
-                  <div
-                    key={log.id}
-                    className="p-space-sm bg-surface-container-low/70 rounded-xl border border-surface-container flex flex-col gap-1.5 hover:bg-surface-container-low transition-colors"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`w-2 h-2 rounded-full ${
-                            log.actionType === 'financial'
-                              ? 'bg-secondary'
-                              : log.actionType === 'security'
-                              ? 'bg-primary-container'
-                              : 'bg-surface-tint'
-                          }`}
-                        ></span>
-                        <span className="font-bold text-xs text-on-surface">{log.action}</span>
-                        {log.targetRef && (
-                          <span className="px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface font-mono text-[10px] font-bold">
-                            {log.targetRef}
-                          </span>
-                        )}
-                      </div>
-                      <span className="font-mono text-[10px] text-on-surface-variant">
-                        {log.timestamp}
-                      </span>
-                    </div>
-
-                    <p className="font-body-sm text-xs text-on-surface leading-relaxed">
-                      {log.details}
-                    </p>
-
-                    <div className="flex items-center justify-between text-[10px] text-on-surface-variant pt-1 border-t border-surface-container/60 font-mono" dir="ltr">
-                      <span>IP: {log.ipAddress}</span>
-                      <span className="text-outline">{log.hash}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+const ActivitySection: React.FC<{ adminId: string }> = ({ adminId }) => {
+  const logs = useAuditLogs({ actorAdminId: adminId, page: 1, pageSize: 10 });
+  return (
+    <Section
+      title="آخر الأنشطة"
+      actions={
+        <Link to={`/admin/audit?actorAdminId=${adminId}`} className="text-sm text-secondary">
+          عرض الكل في سجل التدقيق
+        </Link>
+      }
+    >
+      {logs.isLoading ? (
+        <Skeleton className="h-32" />
+      ) : logs.isError ? (
+        <ErrorState title="تعذّر تحميل الأنشطة" message={adminErrorMessage(logs.error)} onRetry={() => logs.refetch()} />
+      ) : !logs.data?.data.length ? (
+        <EmptyState title="لا توجد أنشطة مسجلة" icon="history" className="my-0" />
+      ) : (
+        <ul className="divide-y divide-surface-container">
+          {logs.data.data.map((l) => (
+            <li key={l.id} className="flex items-center justify-between gap-2 py-2 text-sm">
+              <span className="flex items-center gap-2">
+                <Badge size="sm" variant="neutral">{label(AUDIT_ACTION_LABEL, l.action)}</Badge>
+                <span className="text-on-surface-variant text-xs">{label(RESOURCE_TYPE_LABEL, l.resourceType)}</span>
+              </span>
+              <span className="text-xs text-on-surface-variant">{formatDateTime(l.createdAt)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Section>
   );
 };

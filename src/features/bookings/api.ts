@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, downloadFile } from '../../lib/api/client';
 
 /** Admin booking as returned by GET /admin/bookings (backend `toBookingDto`). */
@@ -42,7 +42,8 @@ export type AdminBookingFilters = {
   page?: number;
   pageSize?: number;
   q?: string;
-  status?: string;
+  /** The admin list API only accepts CONFIRMED | CANCELLED. */
+  status?: 'CONFIRMED' | 'CANCELLED';
   officeId?: string;
   companyId?: string;
   from?: string;
@@ -82,3 +83,105 @@ export const BOOKING_STATUS_LABEL: Record<AdminBooking['status'], string> = {
   CHANGED: 'مُعدّل',
   EXPIRED: 'منتهي',
 };
+
+/** Result of POST /admin/bookings/:id/cancel (broker bookings only; refunds the office wallet). */
+export type AdminCancelResult = {
+  booking: AdminBooking;
+  refundedAmountMinor: number;
+  commissionClawedBackMinor: number;
+  balanceAfterMinor: number;
+  replayed: boolean;
+};
+
+export function useCancelAdminBooking() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      api.post<AdminCancelResult>(`/admin/bookings/${id}/cancel`, { reason }).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: bookingKeys.all }),
+  });
+}
+
+export function downloadTicketPdf(bookingId: string, ticketNumber: string) {
+  return downloadFile(
+    `/admin/bookings/${bookingId}/tickets/${encodeURIComponent(ticketNumber)}/pdf`,
+    undefined,
+    `ticket-${ticketNumber}.pdf`,
+  );
+}
+
+/** Audit entry from GET /audit-logs (requires `audit.view`). */
+export type AuditLogEntry = {
+  id: string;
+  actorAdminId: string | null;
+  action: string;
+  resourceType: string;
+  resourceId: string | null;
+  requestId: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: string;
+  metadata: Record<string, unknown> | null;
+};
+
+export function useBookingAuditLogs(bookingId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: [...bookingKeys.detail(bookingId ?? ''), 'audit'] as const,
+    queryFn: ({ signal }) =>
+      api
+        .get<AuditLogEntry[]>('/audit-logs', { resourceType: 'booking', resourceId: bookingId, pageSize: 100 }, signal)
+        .then((r) => r.data),
+    enabled: enabled && Boolean(bookingId),
+  });
+}
+
+export const AUDIT_ACTION_LABEL: Record<string, string> = {
+  'booking.confirmed': 'تأكيد الحجز وإصدار التذاكر',
+  'booking.cancelled': 'إلغاء الحجز من مكتب الوكيل',
+  'booking.cancelled.admin': 'إلغاء الحجز من الإدارة',
+  'booking.dispatched': 'إرسال التذاكر',
+};
+
+export const CHANNEL_LABEL: Record<AdminBooking['channel'], string> = {
+  BROKER: 'مكتب وكيل',
+  DIRECT: 'تطبيق العميل',
+};
+
+export const PAYMENT_METHOD_LABEL: Record<AdminBooking['paymentMethod'], string> = {
+  WALLET: 'محفظة المكتب',
+  ONLINE: 'دفع إلكتروني',
+  CASH_ON_BOARD: 'نقدًا عند الصعود',
+};
+
+export const PAYMENT_STATUS_LABEL: Record<AdminBooking['paymentStatus'], string> = {
+  PENDING: 'بانتظار الدفع',
+  PAID: 'مدفوع',
+  UNPAID_CASH: 'نقدي غير مدفوع',
+  PAID_CASH: 'نقدي مدفوع',
+  REFUNDED: 'مسترد',
+  PARTIALLY_REFUNDED: 'مسترد جزئيًا',
+};
+
+export const COMMISSION_STATUS_LABEL: Record<string, string> = {
+  UNSETTLED: 'غير مسوّاة',
+  RESERVED: 'محجوزة لتسوية',
+  SETTLED: 'مسوّاة',
+  CLAWED_BACK: 'مستردة',
+};
+
+export const TICKET_STATUS_LABEL: Record<string, string> = {
+  CONFIRMED: 'صالحة',
+  CANCELLED: 'ملغاة',
+  CHANGED: 'منقولة لرحلة أخرى',
+};
+
+export function bookingStatusVariant(status: AdminBooking['status']): 'success' | 'error' | 'warning' | 'neutral' {
+  if (status === 'CONFIRMED') return 'success';
+  if (status === 'CANCELLED') return 'error';
+  if (status === 'PENDING_PAYMENT') return 'warning';
+  return 'neutral';
+}
+
+export function bookingRefLabel(b: Pick<AdminBooking, 'bookingRef' | 'id'>): string {
+  return b.bookingRef ?? b.id.slice(-8).toUpperCase();
+}

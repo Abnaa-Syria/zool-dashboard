@@ -1,172 +1,243 @@
 import * as React from 'react';
-import { useSearchParams } from 'react-router-dom';
-import type { Booking, BookingsFilterState, DateFilterType } from '../types/booking';
-import { useBookings } from '../hooks/useBookings';
-import { bookingService } from '../services/bookingService';
-import { BookingsMetricsCards } from '../components/BookingsMetricsCards';
-import { BookingsFiltersToolbar } from '../components/BookingsFiltersToolbar';
-import { BookingsTable } from '../components/BookingsTable';
-import { TicketPreviewModal } from '../components/TicketPreviewModal';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
+import { Badge } from '../../../components/ui/Badge';
+import { Button } from '../../../components/ui/Button';
+import { EmptyState, ErrorState } from '../../../components/ui/EmptyState';
+import { Input } from '../../../components/ui/Input';
+import { PageHeader } from '../../../components/ui/PageHeader';
+import { Skeleton } from '../../../components/ui/Skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../components/ui/Table';
+import { errorMessage } from '../../../lib/api/errors';
+import { formatDateTime } from '../../../lib/dates';
+import { formatSdg } from '../../../lib/money';
+import {
+  BOOKING_STATUS_LABEL,
+  bookingRefLabel,
+  bookingStatusVariant,
+  exportBookingsCsv,
+  useAdminBookings,
+  type AdminBookingFilters,
+} from '../api';
+
+const PAGE_SIZE = 20;
+const STATUSES = ['CONFIRMED', 'CANCELLED'] as const;
+
+/** Filters live in the URL so the list is linkable (e.g. `/bookings?officeId=…`). */
+function readFilters(params: URLSearchParams): Omit<AdminBookingFilters, 'pageSize'> {
+  const status = params.get('status');
+  return {
+    page: Math.max(1, Number(params.get('page')) || 1),
+    q: params.get('q') ?? undefined,
+    status: STATUSES.find((s) => s === status),
+    from: params.get('from') ?? undefined,
+    to: params.get('to') ?? undefined,
+    companyId: params.get('companyId') ?? undefined,
+    officeId: params.get('officeId') ?? undefined,
+  };
+}
 
 export const BookingsListPage: React.FC = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const filters = readFilters(params);
+  const { page = 1, ...exportFilters } = filters;
+  const list = useAdminBookings({ ...filters, pageSize: PAGE_SIZE });
+  const [search, setSearch] = React.useState(filters.q ?? '');
+  const [exporting, setExporting] = React.useState(false);
+  const [exportError, setExportError] = React.useState<string | null>(null);
 
-  // Read URL search params into filter state to ensure context is preserved on navigation
-  const filters: BookingsFilterState = React.useMemo(() => {
-    return {
-      searchQuery: searchParams.get('q') || '',
-      source: searchParams.get('source') || 'all',
-      bookingStatus: searchParams.get('bStatus') || 'all',
-      paymentStatus: searchParams.get('pStatus') || 'all',
-      ticketStatus: searchParams.get('tStatus') || 'all',
-      carrierId: searchParams.get('carrier') || 'all',
-      brokerId: searchParams.get('broker') || 'all',
-      routeId: searchParams.get('route') || 'all',
-      dateFilterType: (searchParams.get('dateType') as DateFilterType) || 'booking_created',
-      datePreset: (searchParams.get('preset') as BookingsFilterState['datePreset']) || 'all',
-      startDate: searchParams.get('start') || undefined,
-      endDate: searchParams.get('end') || undefined,
-      sortBy: (searchParams.get('sort') as BookingsFilterState['sortBy']) || 'createdAt',
-      sortOrder: (searchParams.get('order') as 'asc' | 'desc') || 'desc',
-      page: Number(searchParams.get('page')) || 1,
-      pageSize: Number(searchParams.get('size')) || 10,
-    };
-  }, [searchParams]);
-
-  // Query Hook
-  const { data, isLoading, refetch } = useBookings(filters);
-
-  // Modal ticket preview state
-  const [previewBooking, setPreviewBooking] = React.useState<Booking | null>(null);
-  const [isTicketModalOpen, setIsTicketModalOpen] = React.useState(false);
-  const [isExporting, setIsExporting] = React.useState(false);
-
-  // Helper to update search params
-  const updateFilters = (newFilters: Partial<BookingsFilterState>) => {
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        const merged = { ...filters, ...newFilters };
-
-        if (merged.searchQuery) next.set('q', merged.searchQuery);
-        else next.delete('q');
-
-        if (merged.source !== 'all') next.set('source', merged.source);
-        else next.delete('source');
-
-        if (merged.bookingStatus !== 'all') next.set('bStatus', merged.bookingStatus);
-        else next.delete('bStatus');
-
-        if (merged.paymentStatus !== 'all') next.set('pStatus', merged.paymentStatus);
-        else next.delete('pStatus');
-
-        if (merged.ticketStatus !== 'all') next.set('tStatus', merged.ticketStatus);
-        else next.delete('tStatus');
-
-        if (merged.carrierId !== 'all') next.set('carrier', merged.carrierId);
-        else next.delete('carrier');
-
-        if (merged.brokerId !== 'all') next.set('broker', merged.brokerId);
-        else next.delete('broker');
-
-        if (merged.routeId !== 'all') next.set('route', merged.routeId);
-        else next.delete('route');
-
-        if (merged.dateFilterType !== 'booking_created') next.set('dateType', merged.dateFilterType);
-        else next.delete('dateType');
-
-        if (merged.datePreset !== 'all') next.set('preset', merged.datePreset);
-        else next.delete('preset');
-
-        if (merged.sortBy !== 'createdAt') next.set('sort', merged.sortBy);
-        else next.delete('sort');
-
-        if (merged.sortOrder !== 'desc') next.set('order', merged.sortOrder);
-        else next.delete('order');
-
-        if (merged.page > 1) next.set('page', String(merged.page));
-        else next.delete('page');
-
-        if (merged.pageSize !== 10) next.set('size', String(merged.pageSize));
-        else next.delete('size');
-
-        return next;
-      },
-      { replace: true }
-    );
+  const update = (patch: Record<string, string | undefined>) => {
+    const next = new URLSearchParams(params);
+    for (const [k, v] of Object.entries(patch)) {
+      if (v) next.set(k, v);
+      else next.delete(k);
+    }
+    if (!('page' in patch)) next.delete('page');
+    setParams(next, { replace: true });
   };
 
-  const handleResetFilters = () => {
-    setSearchParams(new URLSearchParams(), { replace: true });
-  };
-
-  const handleExportCsv = () => {
-    if (!data?.bookings) return;
-    setIsExporting(true);
+  const onExport = async () => {
+    setExporting(true);
+    setExportError(null);
     try {
-      bookingService.exportBookingsCsv(data.bookings);
+      await exportBookingsCsv(exportFilters);
+    } catch (err) {
+      setExportError(errorMessage(err));
     } finally {
-      setIsExporting(false);
+      setExporting(false);
     }
   };
 
-  const handleSelectBookingForTicket = (booking: Booking) => {
-    setPreviewBooking(booking);
-    setIsTicketModalOpen(true);
-  };
+  const meta = list.data?.meta;
+  const rows = list.data?.data ?? [];
+  const hasFilters = Boolean(filters.q || filters.status || filters.from || filters.to || filters.companyId || filters.officeId);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      {/* Page Header (Matching Stitch _5) */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">الحجوزات والتذاكر</h1>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 text-xs font-semibold border border-emerald-100">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
-              <span>تحديث حي مباشر</span>
-            </span>
-          </div>
-          <p className="text-xs text-slate-500">
-            متابعة الحجوزات والمدفوعات وإصدار التذاكر من جميع قنوات زولغو
-          </p>
-        </div>
-      </div>
-
-      {/* Summary KPI Cards */}
-      {data?.metrics && <BookingsMetricsCards metrics={data.metrics} />}
-
-      {/* Advanced Filters Toolbar */}
-      <BookingsFiltersToolbar
-        filters={filters}
-        onFilterChange={updateFilters}
-        onResetFilters={handleResetFilters}
-        onExportCsv={handleExportCsv}
-        onRefresh={() => refetch()}
-        isExporting={isExporting}
+    <div className="flex flex-col w-full pb-space-xl gap-space-lg">
+      <Breadcrumbs items={[{ label: 'الرئيسية والعمليات', path: '/overview' }, { label: 'الحجوزات والتذاكر' }]} />
+      <PageHeader
+        title="الحجوزات والتذاكر"
+        subtitle="جميع حجوزات المنصة من مكاتب الوكلاء وتطبيق العميل."
+        actions={
+          <Button variant="outline" icon="download" isLoading={exporting} onClick={onExport}>
+            تصدير CSV
+          </Button>
+        }
       />
 
-      {/* Main Table */}
-      <BookingsTable
-        bookings={data?.bookings || []}
-        totalCount={data?.totalCount || 0}
-        filteredCount={data?.filteredCount || 0}
-        filters={filters}
-        onFilterChange={updateFilters}
-        onSelectBookingForTicket={handleSelectBookingForTicket}
-        isLoading={isLoading}
-      />
-
-      {/* Ticket Preview Modal */}
-      {previewBooking && (
-        <TicketPreviewModal
-          booking={previewBooking}
-          isOpen={isTicketModalOpen}
-          onClose={() => {
-            setIsTicketModalOpen(false);
-            setPreviewBooking(null);
+      <section className="bg-surface-container-lowest border border-surface-container-high rounded-xl p-space-md flex flex-wrap items-end gap-space-sm">
+        <form
+          className="flex items-end gap-2 grow min-w-[16rem]"
+          onSubmit={(e) => {
+            e.preventDefault();
+            update({ q: search.trim() || undefined });
           }}
+        >
+          <div className="grow">
+            <Input
+              label="بحث"
+              startIcon="search"
+              placeholder="معرّف الحجز، رقم التذكرة، اسم أو هاتف الراكب"
+              value={search}
+              maxLength={64}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <Button type="submit" variant="secondary">بحث</Button>
+        </form>
+        <label className="flex flex-col gap-1 text-xs text-on-surface-variant">
+          الحالة
+          <select
+            className="h-10 rounded-lg border border-outline-variant/60 bg-surface-container-lowest px-3 text-sm text-on-surface"
+            value={filters.status ?? ''}
+            onChange={(e) => update({ status: e.target.value || undefined })}
+          >
+            <option value="">الكل</option>
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>{BOOKING_STATUS_LABEL[s]}</option>
+            ))}
+          </select>
+        </label>
+        <div className="w-40">
+          <Input label="من تاريخ (تأكيد)" type="date" value={filters.from ?? ''} onChange={(e) => update({ from: e.target.value || undefined })} />
+        </div>
+        <div className="w-40">
+          <Input label="إلى تاريخ" type="date" value={filters.to ?? ''} onChange={(e) => update({ to: e.target.value || undefined })} />
+        </div>
+        {(filters.companyId || filters.officeId) && (
+          <div className="flex gap-2">
+            {filters.companyId && (
+              <Badge variant="info">
+                شركة محددة
+                <button type="button" className="ms-1" aria-label="إزالة فلتر الشركة" onClick={() => update({ companyId: undefined })}>×</button>
+              </Badge>
+            )}
+            {filters.officeId && (
+              <Badge variant="info">
+                مكتب محدد
+                <button type="button" className="ms-1" aria-label="إزالة فلتر المكتب" onClick={() => update({ officeId: undefined })}>×</button>
+              </Badge>
+            )}
+          </div>
+        )}
+        {hasFilters && (
+          <Button
+            variant="ghost"
+            icon="filter_alt_off"
+            onClick={() => {
+              setSearch('');
+              setParams(new URLSearchParams(), { replace: true });
+            }}
+          >
+            مسح الفلاتر
+          </Button>
+        )}
+      </section>
+
+      {exportError && (
+        <div role="alert" className="rounded-lg bg-error-container text-on-error-container px-4 py-2 text-sm">
+          تعذّر التصدير: {exportError}
+        </div>
+      )}
+
+      {list.isLoading ? (
+        <Skeleton className="h-96 rounded-xl" />
+      ) : list.isError ? (
+        <ErrorState title="تعذّر تحميل الحجوزات" message={errorMessage(list.error)} onRetry={() => list.refetch()} />
+      ) : rows.length === 0 ? (
+        <EmptyState
+          title={hasFilters ? 'لا توجد حجوزات مطابقة' : 'لا توجد حجوزات بعد'}
+          description={hasFilters ? 'جرّب تعديل البحث أو الفلاتر.' : 'ستظهر هنا الحجوزات فور تأكيدها.'}
+          icon="confirmation_number"
         />
+      ) : (
+        <>
+          <Table className={list.isFetching ? 'opacity-70' : undefined}>
+            <TableHeader>
+              <TableRow>
+                <TableHead>المرجع</TableHead>
+                <TableHead>المسار</TableHead>
+                <TableHead>الشركة</TableHead>
+                <TableHead>القناة</TableHead>
+                <TableHead>الركاب / التذاكر</TableHead>
+                <TableHead>القيمة</TableHead>
+                <TableHead>الحالة</TableHead>
+                <TableHead>تاريخ التأكيد</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((b) => (
+                <TableRow
+                  key={b.id}
+                  className="cursor-pointer"
+                  tabIndex={0}
+                  onClick={() => navigate(`/bookings/${b.id}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') navigate(`/bookings/${b.id}`);
+                  }}
+                >
+                  <TableCell className="font-mono text-xs text-secondary" dir="ltr">{bookingRefLabel(b)}</TableCell>
+                  <TableCell>
+                    <div>{b.trip.origin} ← {b.trip.destination}</div>
+                    <div className="text-xs text-on-surface-variant">{formatDateTime(b.trip.departureAt)}</div>
+                  </TableCell>
+                  <TableCell>{b.trip.company.name}</TableCell>
+                  <TableCell>{b.channel === 'BROKER' ? b.office?.name ?? 'مكتب وكيل' : 'تطبيق العميل'}</TableCell>
+                  <TableCell className="tabular-nums">{b.passengers.length} / {b.tickets.length}</TableCell>
+                  <TableCell className="tabular-nums">{formatSdg(b.totalAmountMinor)}</TableCell>
+                  <TableCell>
+                    <Badge variant={bookingStatusVariant(b.status)}>{BOOKING_STATUS_LABEL[b.status]}</Badge>
+                  </TableCell>
+                  <TableCell className="text-on-surface-variant">{formatDateTime(b.confirmedAt ?? b.createdAt)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+
+          {meta && (
+            <div className="flex items-center justify-between text-sm text-on-surface-variant">
+              <span>
+                إجمالي {meta.total.toLocaleString('en-US')} حجز — صفحة {meta.page} من {Math.max(1, meta.totalPages)}
+              </span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" icon="chevron_right" disabled={page <= 1} onClick={() => update({ page: String(page - 1) })}>
+                  السابق
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  icon="chevron_left"
+                  iconPosition="end"
+                  disabled={page >= meta.totalPages}
+                  onClick={() => update({ page: String(page + 1) })}
+                >
+                  التالي
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

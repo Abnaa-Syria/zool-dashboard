@@ -1,237 +1,119 @@
 import * as React from 'react';
-import { useCarriers } from '../hooks/useCarriers';
-import { CarriersMetricsCards } from '../components/CarriersMetricsCards';
-import { CarriersFiltersToolbar } from '../components/CarriersFiltersToolbar';
-import { CarriersTable } from '../components/CarriersTable';
+import { Link } from 'react-router-dom';
+import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
+import { Badge } from '../../../components/ui/Badge';
+import { Button } from '../../../components/ui/Button';
+import { EmptyState, ErrorState } from '../../../components/ui/EmptyState';
+import { SearchInput } from '../../../components/ui/Input';
+import { PageHeader } from '../../../components/ui/PageHeader';
+import { Skeleton } from '../../../components/ui/Skeleton';
+import { errorMessage } from '../../../lib/api/errors';
+import { formatDateTime } from '../../../lib/dates';
+import { useAuth } from '../../auth/auth-context';
+import { CARRIER_STATUS_LABEL, useCarriers, type CarrierStatus } from '../api';
 import { AddCarrierModal } from '../components/AddCarrierModal';
-import { carrierService } from '../services/carrierService';
-import { mockCarriersMetrics } from '../fixtures/carrierFixtures';
-import type { TransportCarrier, CarriersFilterState } from '../types/carrier';
+import { useDebouncedValue } from '../useDebouncedValue';
+
+const PAGE_SIZE = 20;
 
 export const CarriersListPage: React.FC = () => {
-  const [filters, setFilters] = React.useState<CarriersFilterState>({
-    searchQuery: '',
-    status: 'all',
-    state: 'all',
-    activeTripsOnly: false,
-    linkedBrokersOnly: false,
-    sortBy: 'name',
-    sortOrder: 'asc',
-    page: 1,
-    pageSize: 10,
-  });
+  const { can } = useAuth();
+  const [search, setSearch] = React.useState('');
+  const q = useDebouncedValue(search.trim(), 300);
+  const [status, setStatus] = React.useState<CarrierStatus | ''>('');
+  const [page, setPage] = React.useState(1);
+  const [addOpen, setAddOpen] = React.useState(false);
 
-  const { data, isLoading, refetch } = useCarriers(filters);
-  const carriers = data?.carriers || [];
-  const totalCount = data?.totalCount || 0;
-  const filteredCount = data?.filteredCount || 0;
-  const metrics = data?.metrics || mockCarriersMetrics;
+  // Reset to page 1 whenever the filters change (render-time state adjustment, no effect).
+  const filterKey = `${q}|${status}`;
+  const [prevFilterKey, setPrevFilterKey] = React.useState(filterKey);
+  if (filterKey !== prevFilterKey) {
+    setPrevFilterKey(filterKey);
+    setPage(1);
+  }
 
-  const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);
-
-  const handleFilterChange = (newFilters: Partial<CarriersFilterState>) => {
-    setFilters((prev) => ({ ...prev, ...newFilters }));
-  };
-
-  const handleResetFilters = () => {
-    setFilters({
-      searchQuery: '',
-      status: 'all',
-      state: 'all',
-      activeTripsOnly: false,
-      linkedBrokersOnly: false,
-      sortBy: 'name',
-      sortOrder: 'asc',
-      page: 1,
-      pageSize: 10,
-    });
-  };
-
-  const handleExportCsv = () => {
-    carrierService.exportCarriersCsv(carriers);
-  };
-
-  const handleAddCarrier = async (carrierData: Partial<TransportCarrier>) => {
-    await carrierService.addCarrier(carrierData as any);
-    refetch();
-  };
+  const carriers = useCarriers({ page, pageSize: PAGE_SIZE, q: q || undefined, status: status || undefined });
+  const rows = carriers.data?.data ?? [];
+  const meta = carriers.data?.meta;
 
   return (
-    <div className="p-6 max-w-[1560px] mx-auto w-full space-y-6 text-right" dir="rtl">
-      {/* 4 Summary Metrics (Bento Style Cards) */}
-      <CarriersMetricsCards metrics={metrics} />
-
-      {/* Search & Filters Segment */}
-      <CarriersFiltersToolbar
-        filters={filters}
-        onFilterChange={handleFilterChange}
-        onResetFilters={handleResetFilters}
-        onExportCsv={handleExportCsv}
-        onRefresh={() => refetch()}
-        onOpenAddModal={() => setIsAddModalOpen(true)}
+    <div className="flex flex-col w-full pb-space-xl gap-space-md">
+      <Breadcrumbs items={[{ label: 'الرئيسية والعمليات', path: '/overview' }, { label: 'شركات النقل' }]} />
+      <PageHeader
+        title="شركات النقل"
+        subtitle="الشركات المشغّلة للرحلات. إيقاف شركة يوقف البيع فورًا (D-SUS-01)."
+        className="mb-0"
+        actions={can('carriers.manage') ? <Button icon="add" onClick={() => setAddOpen(true)}>إضافة شركة</Button> : null}
       />
 
-      {/* Companies Data Table */}
-      <CarriersTable
-        carriers={carriers}
-        totalCount={totalCount}
-        filteredCount={filteredCount}
-        filters={filters}
-        onFilterChange={handleFilterChange}
-        isLoading={isLoading}
-      />
-
-      {/* Corridor Summary Strip & Pending Requirements Widget */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Corridor Performance (8 cols) */}
-        <div className="lg:col-span-8 bg-white rounded-xl p-5 shadow-sm border border-slate-100 space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <div className="flex items-center gap-2">
-              <span className="w-1.5 h-5 bg-[#003B27] rounded-full" />
-              <h3 className="text-sm font-bold text-slate-900">
-                مؤشرات أداء ممرات النقل الحيوية بين المدن
-              </h3>
-            </div>
-            <span className="text-xs text-slate-500">حركة الأسطول اليومية</span>
-          </div>
-
-          <div className="space-y-3">
-            <div className="p-3 bg-slate-50 rounded-lg flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs">
-                  01
-                </span>
-                <div>
-                  <span className="text-xs font-bold text-slate-900 block">
-                    ممر شريان الشمال (الخرطوم — شندي — عطبرة — بورتسودان)
-                  </span>
-                  <span className="text-[11px] text-slate-500">
-                    6 شركات مرخصة • 64 رحلة جارية الآن
-                  </span>
-                </div>
-              </div>
-              <div className="text-left">
-                <span className="text-xs font-bold text-emerald-700 block">تشغيل عالي الكثافة</span>
-                <span className="text-[11px] text-slate-500">متوسط السرعة 82 كم/س</span>
-              </div>
-            </div>
-
-            <div className="p-3 bg-slate-50 rounded-lg flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs">
-                  02
-                </span>
-                <div>
-                  <span className="text-xs font-bold text-slate-900 block">
-                    ممر طريق التحدي والصادرات (الخرطوم — كوستي — الأبيض)
-                  </span>
-                  <span className="text-[11px] text-slate-500">
-                    4 شركات مرخصة • 38 رحلة جارية الآن
-                  </span>
-                </div>
-              </div>
-              <div className="text-left">
-                <span className="text-xs font-bold text-emerald-700 block">تشغيل منتظم</span>
-                <span className="text-[11px] text-slate-500">متوسط السرعة 76 كم/س</span>
-              </div>
-            </div>
-
-            <div className="p-3 bg-slate-50 rounded-lg flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs">
-                  03
-                </span>
-                <div>
-                  <span className="text-xs font-bold text-slate-900 block">
-                    الممر الشمالي الدولي (الخرطوم — مروي — حلفا — أسوان)
-                  </span>
-                  <span className="text-[11px] text-slate-500">
-                    4 شركات مرخصة • 14 رحلة جارية الآن
-                  </span>
-                </div>
-              </div>
-              <div className="text-left">
-                <span className="text-xs font-semibold text-slate-700 block">إجراءات حدودية اعتيادية</span>
-                <span className="text-[11px] text-slate-500">تأخير مجدول 45 دقيقة</span>
-              </div>
-            </div>
-          </div>
+      <div className="flex flex-wrap items-center gap-space-sm">
+        <div className="w-full sm:w-80">
+          <SearchInput value={search} onChange={(e) => setSearch(e.target.value)} onClear={() => setSearch('')} placeholder="بحث بالاسم أو المفتاح..." />
         </div>
-
-        {/* Pending Accreditation Widget (4 cols) */}
-        <div className="lg:col-span-4 bg-white rounded-xl p-5 shadow-sm border border-slate-100 flex flex-col justify-between space-y-4">
-          <div>
-            <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-3">
-              <span className="material-symbols-outlined text-[#8E1B32] text-[20px]">
-                verified_user
-              </span>
-              <h3 className="text-sm font-bold text-slate-900">متطلبات الاعتماد المعلقة</h3>
-            </div>
-            <p className="text-xs text-slate-500 leading-relaxed mb-3">
-              شركات تقدمت بطلب ترخيص أسطول جديد وتنتظر استكمال التحقق من وثائق التأمين والسجل التجاري.
-            </p>
-
-            <div className="space-y-2.5">
-              <div className="p-3 bg-slate-50 rounded-lg flex items-center justify-between text-xs">
-                <div>
-                  <span className="font-bold text-slate-900 block">شركة الأمانة لنقل الركاب</span>
-                  <span className="text-[11px] text-slate-500">
-                    فحص رخص قيادة الأسطول (14 حافلة)
-                  </span>
-                </div>
-                <span className="px-2 py-0.5 rounded bg-rose-100 text-[#8E1B32] font-semibold text-[10px]">
-                  بانتظار التأمين
-                </span>
-              </div>
-
-              <div className="p-3 bg-slate-50 rounded-lg flex items-center justify-between text-xs">
-                <div>
-                  <span className="font-bold text-slate-900 block">مؤسسة الصحراء ترانس</span>
-                  <span className="text-[11px] text-slate-500">معايرة أجهزة التتبع GPS</span>
-                </div>
-                <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-700 font-semibold text-[10px]">
-                  مراجعة تقنية
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="pt-2 border-t border-slate-100">
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg font-semibold text-xs transition-colors flex items-center justify-center gap-1.5"
-            >
-              <span className="material-symbols-outlined text-[16px]">checklist</span>
-              <span>الانتقال إلى سجل التراخيص والاعتماد (6)</span>
-            </button>
-          </div>
-        </div>
+        <select
+          aria-label="الحالة"
+          value={status}
+          onChange={(e) => setStatus(e.target.value as CarrierStatus | '')}
+          className="h-10 rounded-lg border border-outline-variant/60 bg-surface-container-lowest px-3 text-sm"
+        >
+          <option value="">كل الحالات</option>
+          <option value="ACTIVE">{CARRIER_STATUS_LABEL.ACTIVE}</option>
+          <option value="SUSPENDED">{CARRIER_STATUS_LABEL.SUSPENDED}</option>
+        </select>
+        {meta && <span className="text-xs text-on-surface-variant">{meta.total.toLocaleString('en-US')} شركة</span>}
       </div>
 
-      {/* Governance Note */}
-      <div className="p-4 bg-emerald-50/70 border border-emerald-200/60 rounded-xl flex items-start gap-3 text-xs">
-        <span className="material-symbols-outlined text-emerald-800 text-[22px] shrink-0 mt-0.5">
-          policy
-        </span>
-        <div className="flex flex-col gap-0.5">
-          <span className="font-bold text-slate-900">
-            إشعار حوكمة إدارة الكيانات التشغيلية في منصة ZoolGo
-          </span>
-          <p className="text-slate-600 leading-relaxed">
-            تخضع كافة شركات النقل المسجلة في النظام للائحة السلامة والربط الرقمي الإلزامي لأجهزة
-            التتبع عبر الأقمار الصناعية (AVL/GPS) وربط المحافظ الإلكترونية المباشرة لتسوية رسوم العبور
-            والعمولات مع مكاتب الوسطاء والمسافرين. يتم تعليق صلاحيات إصدار التذاكر آلياً لأي أسطول
-            يتوقف بث إشاراته الحية لأكثر من 3 ساعات متواصلة أثناء الرحلة.
-          </p>
-        </div>
-      </div>
+      <section className="bg-surface-container-lowest border border-surface-container-high rounded-xl p-space-md">
+        {carriers.isLoading ? (
+          <Skeleton className="h-48 rounded-lg" />
+        ) : carriers.isError ? (
+          <ErrorState title="تعذّر تحميل الشركات" message={errorMessage(carriers.error)} onRetry={() => carriers.refetch()} />
+        ) : rows.length === 0 ? (
+          <EmptyState
+            title={q || status ? 'لا توجد نتائج مطابقة' : 'لا توجد شركات بعد'}
+            description={q || status ? 'غيّر البحث أو عامل التصفية.' : 'أضف أول شركة نقل لبدء جدولة الرحلات.'}
+            icon="departure_board"
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-on-surface-variant text-xs">
+                <tr className="text-right">
+                  <th className="py-2 px-2 font-medium">الشركة</th>
+                  <th className="py-2 px-2 font-medium">المفتاح</th>
+                  <th className="py-2 px-2 font-medium">الحالة</th>
+                  <th className="py-2 px-2 font-medium">تاريخ الإضافة</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((c) => (
+                  <tr key={c.id} className="border-t border-surface-container hover:bg-surface-container/50">
+                    <td className="py-2 px-2">
+                      <Link to={`/companies/${c.id}`} className="font-semibold text-secondary">{c.name}</Link>
+                    </td>
+                    <td className="py-2 px-2 font-mono text-xs" dir="ltr">{c.key}</td>
+                    <td className="py-2 px-2">
+                      <Badge variant={c.status === 'ACTIVE' ? 'success' : 'error'} dot>{CARRIER_STATUS_LABEL[c.status]}</Badge>
+                    </td>
+                    <td className="py-2 px-2 text-on-surface-variant">{formatDateTime(c.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {meta && meta.totalPages > 1 && (
+          <div className="flex items-center justify-between pt-space-sm mt-space-sm border-t border-surface-container text-xs text-on-surface-variant">
+            <span>صفحة {meta.page} من {meta.totalPages}</span>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" disabled={page <= 1 || carriers.isFetching} onClick={() => setPage((p) => p - 1)}>السابق</Button>
+              <Button size="sm" variant="outline" disabled={page >= meta.totalPages || carriers.isFetching} onClick={() => setPage((p) => p + 1)}>التالي</Button>
+            </div>
+          </div>
+        )}
+      </section>
 
-      {/* Add Carrier Modal */}
-      <AddCarrierModal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        onSubmit={handleAddCarrier}
-      />
+      <AddCarrierModal open={addOpen} onOpenChange={setAddOpen} />
     </div>
   );
 };

@@ -21,9 +21,9 @@ export const navigationConfig: NavSection[] = [
     items: [
       { name: 'نظرة عامة', path: '/overview', icon: 'grid_view', permission: 'bookings.view', data: 'live' },
       { name: 'التتبع المباشر', path: '/tracking', icon: 'share_location', data: 'mock' },
-      { name: 'الحجوزات والتذاكر', path: '/bookings', icon: 'confirmation_number', permission: 'bookings.view', data: 'mock' },
-      { name: 'شركات النقل', path: '/companies', icon: 'departure_board', permission: 'carriers.view', data: 'mock' },
-      { name: 'مكاتب الوكلاء', path: '/brokers', icon: 'storefront', permission: 'brokers.view', data: 'mock' },
+      { name: 'الحجوزات والتذاكر', path: '/bookings', icon: 'confirmation_number', permission: 'bookings.view', data: 'live' },
+      { name: 'شركات النقل', path: '/companies', icon: 'departure_board', permission: 'carriers.view', data: 'live' },
+      { name: 'مكاتب الوكلاء', path: '/brokers', icon: 'storefront', permission: 'brokers.view', data: 'live' },
       { name: 'حسابات المسافرين', path: '/travelers', icon: 'group', permission: 'customers.view', data: 'mock' },
     ],
   },
@@ -39,10 +39,10 @@ export const navigationConfig: NavSection[] = [
   {
     title: 'إدارة النظام والصلاحيات',
     items: [
-      { name: 'فريق الإدارة', path: '/admin/team', icon: 'shield_person', permission: 'admins.view', data: 'mock' },
-      { name: 'الأدوار والصلاحيات', path: '/admin/roles', icon: 'lock_person', permission: 'roles.view', data: 'mock' },
-      { name: 'سجل الأنشطة والتدقيق', path: '/admin/audit', icon: 'history_toggle_off', permission: 'audit.view', data: 'mock' },
-      { name: 'الإعدادات العامة', path: '/admin/settings', icon: 'settings', permission: 'settings.view', data: 'mock' },
+      { name: 'فريق الإدارة', path: '/admin/team', icon: 'shield_person', permission: 'admins.view', data: 'live' },
+      { name: 'الأدوار والصلاحيات', path: '/admin/roles', icon: 'lock_person', permission: 'roles.view', data: 'live' },
+      { name: 'سجل الأنشطة والتدقيق', path: '/admin/audit', icon: 'history_toggle_off', permission: 'audit.view', data: 'live' },
+      { name: 'الإعدادات العامة', path: '/admin/settings', icon: 'settings', permission: 'settings.view', data: 'live' },
     ],
   },
 ];
