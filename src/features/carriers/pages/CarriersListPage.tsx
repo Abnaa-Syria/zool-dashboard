@@ -82,6 +82,7 @@ export const CarriersListPage: React.FC = () => {
                   <th className="py-2 px-2 font-medium">الشركة</th>
                   <th className="py-2 px-2 font-medium">المفتاح</th>
                   <th className="py-2 px-2 font-medium">الحالة</th>
+                  <th className="py-2 px-2 font-medium">المكاتب المرتبطة</th>
                   <th className="py-2 px-2 font-medium">تاريخ الإضافة</th>
                 </tr>
               </thead>
@@ -95,6 +96,7 @@ export const CarriersListPage: React.FC = () => {
                     <td className="py-2 px-2">
                       <Badge variant={c.status === 'ACTIVE' ? 'success' : 'error'} dot>{CARRIER_STATUS_LABEL[c.status]}</Badge>
                     </td>
+                    <td className="py-2 px-2 tabular-nums">{c.assignmentCount?.toLocaleString('en-US') ?? '—'}</td>
                     <td className="py-2 px-2 text-on-surface-variant">{formatDateTime(c.createdAt)}</td>
                   </tr>
                 ))}

@@ -19,6 +19,8 @@ export type AuthState = {
   requestOtp: (phone: string) => Promise<OtpChallenge>;
   verifyOtp: (input: { phone: string; code: string; challengeId: string }) => Promise<void>;
   logout: () => Promise<void>;
+  /** Re-reads GET /auth/me so roles/permissions (and `can()`) reflect changes without re-login. */
+  refreshProfile: () => Promise<void>;
   can: (permission: string) => boolean;
 };
 

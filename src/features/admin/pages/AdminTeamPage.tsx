@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
@@ -9,11 +9,12 @@ import { Skeleton } from '../../../components/ui/Skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../components/ui/Table';
 import { formatDateTime } from '../../../lib/dates';
 import { useAuth } from '../../auth/auth-context';
-import { adminErrorMessage, useAdmins, useRoles } from '../api';
+import { adminErrorMessage, useAdmins, useRoles, type AdminStatus } from '../api';
 import { AdminStatusBadge, Pager } from '../components/AdminUi';
 import { CreateAdminModal } from '../components/CreateAdminModal';
 
 const PAGE_SIZE = 50;
+const SEARCH_DEBOUNCE_MS = 300;
 
 const STATUS_FILTERS = [
   { key: '', label: 'الكل' },
@@ -21,32 +22,66 @@ const STATUS_FILTERS = [
   { key: 'SUSPENDED', label: 'موقوف' },
 ] as const;
 
-/** GET /admins — server pagination; search & status filter the loaded page (API has no filters). */
+function readStatus(value: string | null): AdminStatus | '' {
+  return value === 'ACTIVE' || value === 'SUSPENDED' ? value : '';
+}
+
+/** GET /admins — server-side pagination, search (`q`: name, employee code, phone) and status; filters live in the URL. */
 export const AdminTeamPage: React.FC = () => {
   const { can, admin: me } = useAuth();
   const navigate = useNavigate();
-  const [page, setPage] = React.useState(1);
-  const [search, setSearch] = React.useState('');
-  const [status, setStatus] = React.useState<string>('');
+  const [params, setParams] = useSearchParams();
+  const q = params.get('q') ?? '';
+  const status = readStatus(params.get('status'));
+  const page = Math.max(1, Number(params.get('page')) || 1);
+  const [search, setSearch] = React.useState(q);
   const [createOpen, setCreateOpen] = React.useState(false);
 
-  const admins = useAdmins({ page, pageSize: PAGE_SIZE });
+  // Keep the box in sync when the URL changes from outside (back/forward, links).
+  const [prevQ, setPrevQ] = React.useState(q);
+  if (prevQ !== q) {
+    setPrevQ(q);
+    // Our own debounced write lands here too; keep in-progress text such as a trailing space.
+    if (search.trim() !== q) setSearch(q);
+  }
+
+  /** Patches URL params; any filter change resets to page 1. */
+  const update = React.useCallback(
+    (patch: Record<string, string | undefined>) =>
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          for (const [k, v] of Object.entries(patch)) {
+            if (v) next.set(k, v);
+            else next.delete(k);
+          }
+          if (!('page' in patch)) next.delete('page');
+          return next;
+        },
+        { replace: true },
+      ),
+    [setParams],
+  );
+
+  const searchTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  React.useEffect(() => () => clearTimeout(searchTimer.current), []);
+  const onSearch = (value: string) => {
+    setSearch(value);
+    clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => update({ q: value.trim() || undefined }), SEARCH_DEBOUNCE_MS);
+  };
+  const clearSearch = () => {
+    clearTimeout(searchTimer.current);
+    setSearch('');
+    update({ q: undefined });
+  };
+
+  const admins = useAdmins({ page, pageSize: PAGE_SIZE, q: q || undefined, status: status || undefined });
   const canCreate = can('admins.create');
   const roles = useRoles(canCreate && can('roles.view'));
 
-  const rows = React.useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return (admins.data?.data ?? []).filter((a) => {
-      if (status && a.status !== status) return false;
-      if (!q) return true;
-      const phone = a.identities.find((i) => i.type === 'PHONE')?.value ?? '';
-      return a.displayName.toLowerCase().includes(q) || a.employeeCode.toLowerCase().includes(q) || phone.includes(q);
-    });
-  }, [admins.data, search, status]);
-
-  const loaded = admins.data?.data ?? [];
-  const activeCount = loaded.filter((a) => a.status === 'ACTIVE').length;
-  const suspendedCount = loaded.filter((a) => a.status === 'SUSPENDED').length;
+  const rows = admins.data?.data ?? [];
+  const hasFilters = Boolean(q || status);
 
   return (
     <div className="flex flex-col w-full pb-space-xl gap-space-lg">
@@ -69,7 +104,7 @@ export const AdminTeamPage: React.FC = () => {
 
       <div className="flex flex-col md:flex-row md:items-center gap-space-sm">
         <div className="md:w-80">
-          <SearchInput value={search} onChange={(e) => setSearch(e.target.value)} onClear={() => setSearch('')} placeholder="بحث بالاسم أو الرقم الوظيفي أو الهاتف" />
+          <SearchInput value={search} onChange={(e) => onSearch(e.target.value)} onClear={clearSearch} placeholder="بحث بالاسم أو الرقم الوظيفي أو الهاتف" />
         </div>
         <div className="flex gap-1 bg-surface-container rounded-lg p-1" role="tablist" aria-label="الحالة">
           {STATUS_FILTERS.map((s) => (
@@ -77,17 +112,13 @@ export const AdminTeamPage: React.FC = () => {
               key={s.key}
               role="tab"
               aria-selected={status === s.key}
-              onClick={() => setStatus(s.key)}
+              onClick={() => update({ status: s.key || undefined })}
               className={`px-3 py-1 rounded-md text-sm ${status === s.key ? 'bg-surface-container-lowest shadow-sm font-semibold text-on-surface' : 'text-on-surface-variant'}`}
             >
               {s.label}
-              {s.key === 'ACTIVE' && admins.data ? ` (${activeCount})` : s.key === 'SUSPENDED' && admins.data ? ` (${suspendedCount})` : ''}
             </button>
           ))}
         </div>
-        {admins.data?.meta && admins.data.meta.totalPages > 1 && (search || status) && (
-          <span className="text-[11px] text-outline">التصفية تشمل الصفحة الحالية فقط.</span>
-        )}
       </div>
 
       {admins.isLoading ? (
@@ -96,8 +127,8 @@ export const AdminTeamPage: React.FC = () => {
         <ErrorState title="تعذّر تحميل فريق الإدارة" message={adminErrorMessage(admins.error)} onRetry={() => admins.refetch()} />
       ) : rows.length === 0 ? (
         <EmptyState
-          title={loaded.length ? 'لا توجد نتائج مطابقة' : 'لا يوجد مشرفون'}
-          description={loaded.length ? 'غيّر عبارة البحث أو عامل تصفية الحالة.' : undefined}
+          title={hasFilters ? 'لا توجد نتائج مطابقة' : 'لا يوجد مشرفون'}
+          description={hasFilters ? 'غيّر عبارة البحث أو عامل تصفية الحالة.' : undefined}
           icon="shield_person"
         />
       ) : (
@@ -144,7 +175,7 @@ export const AdminTeamPage: React.FC = () => {
         </Table>
       )}
 
-      <Pager meta={admins.data?.meta} onPage={setPage} disabled={admins.isFetching} />
+      <Pager meta={admins.data?.meta} onPage={(p) => update({ page: p > 1 ? String(p) : undefined })} disabled={admins.isFetching} />
 
       {canCreate && (
         <CreateAdminModal

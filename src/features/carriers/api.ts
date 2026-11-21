@@ -10,6 +10,7 @@ export type CarrierListItem = {
   name: string;
   status: CarrierStatus;
   createdAt: string;
+  /** Broker offices assigned to this carrier (present on GET /carriers list rows). */
   assignmentCount?: number;
 };
 

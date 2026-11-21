@@ -12,6 +12,8 @@ export type AdminBooking = {
   officeId: string | null;
   office: { id: string; code: string; name: string } | null;
   customerId: string | null;
+  /** DIRECT (customer app) bookings only; null for broker bookings. */
+  customer: { id: string; displayName: string | null; phone: string | null } | null;
   employee: { id: string; displayName: string } | null;
   trip: {
     id: string;
@@ -25,6 +27,7 @@ export type AdminBooking = {
   commissionStatus: string | null;
   confirmedAt: string | null;
   cancelledAt: string | null;
+  cancelReason: string | null;
   createdAt: string;
   passengers: Array<{ id: string; fullName: string; phone: string | null; idNumber: string | null }>;
   tickets: Array<{
@@ -114,6 +117,7 @@ export function downloadTicketPdf(bookingId: string, ticketNumber: string) {
 export type AuditLogEntry = {
   id: string;
   actorAdminId: string | null;
+  actor: { id: string; displayName: string } | null;
   action: string;
   resourceType: string;
   resourceId: string | null;

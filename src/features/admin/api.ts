@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../lib/api/client';
 import { errorMessage } from '../../lib/api/errors';
+import { useAuth } from '../auth/auth-context';
 
 /* ------------------------------------------------------------------ DTOs */
 
@@ -54,6 +55,8 @@ export type AdminSession = {
 export type AuditLog = {
   id: string;
   actorAdminId: string | null;
+  /** Resolved actor (null for system / broker-employee actions). */
+  actor: { id: string; displayName: string } | null;
   action: string;
   resourceType: string;
   resourceId: string | null;
@@ -72,10 +75,18 @@ export type AuditFilters = {
   resourceType?: string;
   resourceId?: string;
   requestId?: string;
-  /** ISO date-time (inclusive). */
+  /** Sudan calendar date YYYY-MM-DD (inclusive start of day) or ISO date-time. */
   from?: string;
-  /** ISO date-time (inclusive). */
+  /** Sudan calendar date YYYY-MM-DD (inclusive end of day) or ISO date-time. */
   to?: string;
+};
+
+export type AdminListFilters = {
+  page: number;
+  pageSize: number;
+  /** Matches display name, employee code or phone (server-side). */
+  q?: string;
+  status?: AdminStatus;
 };
 
 export type SettingValue = number | boolean | string;
@@ -99,7 +110,7 @@ export type SystemSetting = {
 
 export const adminKeys = {
   all: ['sys-admins'] as const,
-  list: (f: { page: number; pageSize: number }) => [...adminKeys.all, 'list', f] as const,
+  list: (f: AdminListFilters) => [...adminKeys.all, 'list', f] as const,
   detail: (id: string) => [...adminKeys.all, 'detail', id] as const,
   sessions: (adminId: string) => ['sys-sessions', adminId] as const,
 };
@@ -118,7 +129,7 @@ export const settingsKeys = { all: ['sys-settings'] as const };
 
 /* --------------------------------------------------------------- admins */
 
-export function useAdmins(params: { page: number; pageSize: number }, enabled = true) {
+export function useAdmins(params: AdminListFilters, enabled = true) {
   return useQuery({
     queryKey: adminKeys.list(params),
     queryFn: ({ signal }) => api.get<AdminUser[]>('/admins', params, signal),
@@ -147,8 +158,23 @@ export function useCreateAdmin() {
   });
 }
 
+/** Re-reads the signed-in admin's profile so `can()` follows role/permission changes; failures are non-fatal. */
+function useSelfRefresh() {
+  const { admin: me, refreshProfile } = useAuth();
+  return {
+    me,
+    refresh: () => {
+      refreshProfile().catch(() => undefined);
+    },
+  };
+}
+
 /** Writes the fresh DTO into the detail cache and refreshes lists. */
-function useAdminMutation<V>(fn: (vars: V) => Promise<AdminUser>, extraKeys: ReadonlyArray<readonly unknown[]> = []) {
+function useAdminMutation<V>(
+  fn: (vars: V) => Promise<AdminUser>,
+  extraKeys: ReadonlyArray<readonly unknown[]> = [],
+  after?: (admin: AdminUser) => void,
+) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: fn,
@@ -156,6 +182,7 @@ function useAdminMutation<V>(fn: (vars: V) => Promise<AdminUser>, extraKeys: Rea
       qc.setQueryData(adminKeys.detail(admin.id), admin);
       qc.invalidateQueries({ queryKey: adminKeys.all });
       for (const key of extraKeys) qc.invalidateQueries({ queryKey: key });
+      after?.(admin);
     },
   });
 }
@@ -174,9 +201,13 @@ export function useUpdateAdminStatus() {
 }
 
 export function useSetAdminRoles() {
+  const self = useSelfRefresh();
   return useAdminMutation(
     (v: { id: string; roleIds: string[] }) => api.put<AdminUser>(`/admins/${v.id}/roles`, { roleIds: v.roleIds }).then((r) => r.data),
     [roleKeys.all],
+    (admin) => {
+      if (admin.id === self.me?.id) self.refresh();
+    },
   );
 }
 
@@ -229,14 +260,18 @@ export function usePermissionCatalog(enabled = true) {
   });
 }
 
-function useRoleMutation<V, R>(fn: (vars: V) => Promise<R>) {
+/** `roleIdOf` names the role a mutation touches; if the signed-in admin holds it, their profile is re-read. */
+function useRoleMutation<V, R>(fn: (vars: V) => Promise<R>, roleIdOf?: (vars: V) => string) {
   const qc = useQueryClient();
+  const self = useSelfRefresh();
   return useMutation({
     mutationFn: fn,
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: roleKeys.all });
       // Member DTOs embed role names.
       qc.invalidateQueries({ queryKey: adminKeys.all });
+      const roleId = roleIdOf?.(vars);
+      if (roleId && self.me?.roles.some((r) => r.id === roleId)) self.refresh();
     },
   });
 }
@@ -248,15 +283,21 @@ export function useCreateRole() {
 }
 
 export function useUpdateRole() {
-  return useRoleMutation((v: { id: string; name?: string; description?: string | null; isActive?: boolean }) => {
-    const { id, ...body } = v;
-    return api.patch<Role>(`/roles/${id}`, body).then((r) => r.data);
-  });
+  return useRoleMutation(
+    (v: { id: string; name?: string; description?: string | null; isActive?: boolean }) => {
+      const { id, ...body } = v;
+      return api.patch<Role>(`/roles/${id}`, body).then((r) => r.data);
+    },
+    // Deactivating/activating a held role changes effective permissions.
+    (v) => v.id,
+  );
 }
 
 export function useSetRolePermissions() {
-  return useRoleMutation((v: { id: string; permissionKeys: string[] }) =>
-    api.put<Role>(`/roles/${v.id}/permissions`, { permissionKeys: v.permissionKeys }).then((r) => r.data),
+  return useRoleMutation(
+    (v: { id: string; permissionKeys: string[] }) =>
+      api.put<Role>(`/roles/${v.id}/permissions`, { permissionKeys: v.permissionKeys }).then((r) => r.data),
+    (v) => v.id,
   );
 }
 
@@ -296,6 +337,18 @@ export function useUpdateSystemSettings() {
   });
 }
 
+/** DELETE /admin/settings/:key — drops the stored override so the default applies again. */
+export function useResetSystemSetting() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (key: string) => api.delete<SystemSetting[]>(`/admin/settings/${encodeURIComponent(key)}`).then((r) => r.data),
+    onSuccess: (data) => {
+      qc.setQueryData(settingsKeys.all, data);
+      qc.invalidateQueries({ queryKey: auditKeys.all });
+    },
+  });
+}
+
 /* --------------------------------------------------------------- errors */
 
 /** Admin-module specific messages on top of the shared `errorMessage`. */
@@ -305,7 +358,11 @@ export function adminErrorMessage(err: unknown): string {
       if (/delete system role/i.test(err.message)) return 'لا يمكن حذف دور نظامي.';
       if (/deactivate/i.test(err.message)) return 'لا يمكن تعطيل دور المدير العام (Super Admin).';
       if (/retain/i.test(err.message)) return 'المدير العام التأسيسي يجب أن يحتفظ بدور Super Admin.';
-      return 'إجراء محظور: لا يمكن إيقاف آخر مدير عام تأسيسي نشط حتى لا يُغلق النظام أمام الجميع.';
+      if (/suspend/i.test(err.message)) return 'إجراء محظور: لا يمكن إيقاف آخر مدير عام تأسيسي نشط حتى لا يُغلق النظام أمام الجميع.';
+    }
+    if (err.code === 'ROLE_IN_USE') {
+      const count = (err.details as { memberCount?: number } | null)?.memberCount;
+      if (typeof count === 'number') return `لا يمكن حذف الدور لأنه مسند إلى ${count} مشرف. أزل الدور عنهم أولًا ثم أعد المحاولة.`;
     }
     if (err.code === 'CONFLICT') {
       if (/own account/i.test(err.message)) return 'لا يمكنك إيقاف حسابك الشخصي.';

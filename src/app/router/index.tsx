@@ -15,13 +15,8 @@ import { BrokerDetailsPage } from '../../features/brokers/pages/BrokerDetailsPag
 import { TravelersListPage } from '../../features/travelers/pages/TravelersListPage';
 import { TravelerDetailsPage } from '../../features/travelers/pages/TravelerDetailsPage';
 import { WalletsOverviewPage } from '../../features/financials/pages/WalletsOverviewPage';
-import { GeneralLedgerPage } from '../../features/financials/pages/GeneralLedgerPage';
-import { JournalEntryDetailsPage } from '../../features/financials/pages/JournalEntryDetailsPage';
 import { TopUpQueuePage } from '../../features/financials/pages/TopUpQueuePage';
 import { FinancialReportsPage } from '../../features/reports/pages/FinancialReportsPage';
-import { TrialBalancePage } from '../../features/reports/pages/TrialBalancePage';
-import { CarrierSharesPage } from '../../features/reports/pages/CarrierSharesPage';
-import { ReportsExportCenterPage } from '../../features/reports/pages/ReportsExportCenterPage';
 import { RefundsQueuePage } from '../../features/refunds/pages/RefundsQueuePage';
 import { CancellationPoliciesPage } from '../../features/refunds/pages/CancellationPoliciesPage';
 import { DisputeDossierPage } from '../../features/refunds/pages/DisputeDossierPage';
@@ -98,18 +93,10 @@ export const router = createBrowserRouter([
         path: 'travelers/:id',
         element: <TravelerDetailsPage />,
       },
-      // Financial Modules - Wallets, Ledger & Verification Milestone
+      // Financial Modules - wallets, top-up review, commission settlements (live API)
       {
         path: 'financials/wallets',
         element: <WalletsOverviewPage />,
-      },
-      {
-        path: 'financials/ledger',
-        element: <GeneralLedgerPage />,
-      },
-      {
-        path: 'financials/ledger/:id',
-        element: <JournalEntryDetailsPage />,
       },
       {
         path: 'financials/topup-queue',
@@ -134,18 +121,6 @@ export const router = createBrowserRouter([
       {
         path: 'reports',
         element: <FinancialReportsPage />,
-      },
-      {
-        path: 'reports/trial-balance',
-        element: <TrialBalancePage />,
-      },
-      {
-        path: 'reports/carrier-shares',
-        element: <CarrierSharesPage />,
-      },
-      {
-        path: 'reports/export-center',
-        element: <ReportsExportCenterPage />,
       },
       // System Administration Modules
       {

@@ -1,209 +1,235 @@
-import React, { useState } from 'react';
+import * as React from 'react';
 import { Link } from 'react-router-dom';
-import { useSettlements } from '../hooks/useSettlements';
-import { SettlementsMetricsCards } from '../components/SettlementsMetricsCards';
-import { SettlementBatchesTable } from '../components/SettlementBatchesTable';
-import { CarrierPayoutsTable } from '../components/CarrierPayoutsTable';
-import { BrokerCommissionsTable } from '../components/BrokerCommissionsTable';
-import { SettlementApprovalDrawer } from '../components/SettlementApprovalDrawer';
-import type { SettlementBatch } from '../types/settlements';
+import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
+import { Badge } from '../../../components/ui/Badge';
+import { Button } from '../../../components/ui/Button';
+import { MetricCard } from '../../../components/ui/Card';
+import { EmptyState, ErrorState } from '../../../components/ui/EmptyState';
+import { PageHeader } from '../../../components/ui/PageHeader';
+import { Skeleton } from '../../../components/ui/Skeleton';
+import { formatDateTime } from '../../../lib/dates';
+import { formatSdg } from '../../../lib/money';
+import { useAuth } from '../../auth/auth-context';
+import { financeErrorMessage, useOfficeLookup, type OfficeRef } from '../../financials/api';
+import { OfficeSelect } from '../../financials/components/OfficeSelect';
+import { Pager } from '../../financials/components/Pager';
+import { selectClass, usePageReset } from '../../financials/listState';
+import {
+  ACCRUAL_STATUS_LABEL,
+  ACCRUAL_STATUS_VARIANT,
+  SETTLEMENT_STATUS_LABEL,
+  SETTLEMENT_STATUS_VARIANT,
+  useAccruals,
+  useSettlements,
+  type AccrualStatus,
+  type CommissionSummary,
+  type SettlementStatus,
+} from '../api';
+import { CreateSettlementModal } from '../components/CreateSettlementModal';
+import { SettlementDrawer } from '../components/SettlementDrawer';
+import { formatPeriod } from '../period';
 
+const PAGE_SIZE = 20;
+type Tab = 'settlements' | 'accruals';
+
+/** Broker commission settlements (D-SET-01) + the accrual ledger behind them. */
 export const SettlementsPage: React.FC = () => {
-  const {
-    batches,
-    metrics,
-    carrierItems,
-    brokerItems,
-    filters,
-    applyFilters,
-    approveBatch,
-    creditBrokerWallet,
-    disburseBrokerBank,
-    disburseCarrier,
-    exportBankakCsv,
-    exportSummaryCsv,
-  } = useSettlements();
-
-  const [activeTab, setActiveTab] = useState<'batches' | 'carriers' | 'brokers'>('batches');
-  const [selectedBatchForApproval, setSelectedBatchForApproval] = useState<SettlementBatch | null>(null);
-  const [notification, setNotification] = useState<string | null>(null);
-
-  const showNotification = (msg: string) => {
-    setNotification(msg);
-    setTimeout(() => setNotification(null), 3500);
-  };
-
-  const handleApproveBatch = (batchId: string, approver: string, source: string) => {
-    const approved = approveBatch(batchId, approver, source);
-    showNotification(`تم اعتماد وصرف الدورة (${approved.id}) وتوليد الإشعار البنكي ${approved.bankReference} بنجاح!`);
-    setSelectedBatchForApproval(null);
-  };
-
-  const handleCreditWallet = (brokerId: string, amount: number) => {
-    creditBrokerWallet(brokerId, amount);
-    showNotification(`تم إيداع مبلغ ${amount.toLocaleString('en-US')} ج.س في محفظة الوكيل (${brokerId}) بنجاح.`);
-  };
-
-  const handleDisburseBrokerBank = (brokerId: string) => {
-    disburseBrokerBank(brokerId);
-    showNotification(`تم تحويل عمولة الوكيل (${brokerId}) بنكياً بنجاح.`);
-  };
-
-  const handleDisburseCarrier = (carrierId: string) => {
-    disburseCarrier(carrierId);
-    showNotification(`تم اعتماد وصرف حصة شركة النقل (${carrierId}) بنجاح.`);
-  };
+  const { can } = useAuth();
+  const [tab, setTab] = React.useState<Tab>('settlements');
+  const [officeId, setOfficeId] = React.useState('');
+  const [createOpen, setCreateOpen] = React.useState(false);
+  const [openId, setOpenId] = React.useState<string | null>(null);
+  const offices = useOfficeLookup();
+  const officeById = React.useMemo(() => new Map((offices.data ?? []).map((o) => [o.id, o])), [offices.data]);
 
   return (
-    <div className="flex flex-col w-full min-h-screen">
-      {/* Top Banner & Header Area */}
-      <div className="px-space-lg pt-space-lg pb-space-md">
-        {/* Breadcrumbs */}
-        <div className="flex items-center gap-2 font-label-md text-xs text-on-surface-variant mb-space-sm">
-          <Link to="/overview" className="hover:text-secondary transition-colors">
-            الرئيسية والعمليات
-          </Link>
-          <span className="material-symbols-outlined text-[14px]">chevron_left</span>
-          <span className="text-on-surface-variant">المالية والتسويات</span>
-          <span className="material-symbols-outlined text-[14px]">chevron_left</span>
-          <span className="text-secondary font-bold">العمولات ودورات التسوية</span>
-        </div>
-
-        {/* Main Header Bar */}
-        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-space-md pb-space-md">
-          <div>
-            <div className="flex items-center gap-space-sm">
-              <h1 className="font-display-md text-xl md:text-2xl text-on-surface font-bold tracking-tight">
-                العمولات ودورات التسوية المالية
-              </h1>
-              <span className="px-2.5 py-1 rounded-full bg-primary-fixed text-on-primary-fixed font-label-md text-xs font-bold">
-                {metrics.pendingBatchesCount} دورات معلقة
-              </span>
-            </div>
-            <p className="font-body-md text-xs md:text-sm text-on-surface-variant mt-1 max-w-3xl leading-relaxed">
-              إدارة دورات تسوية الحصص لشركات النقل البري وعمولات مكاتب الوكلاء المعتمدة، جدولة الصرف
-              المصرفي المجمع، ومطابقة قيود اليومية العامة.
-            </p>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex items-center gap-space-sm shrink-0">
-            <button
-              type="button"
-              onClick={exportSummaryCsv}
-              className="flex items-center gap-2 h-10 px-4 rounded-lg bg-surface-container-lowest text-secondary hover:bg-surface-container-high transition-colors font-label-lg text-xs font-bold shadow-sm border border-surface-container-high/60 cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-[18px]">download</span>
-              <span>تصدير كشوفات التسوية (CSV)</span>
-            </button>
-            <Link
-              to="/financials/ledger"
-              className="flex items-center gap-2 h-10 px-4 rounded-lg bg-primary-container text-on-primary hover:opacity-95 transition-opacity font-label-lg text-xs font-bold shadow-sm cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-[18px]">receipt_long</span>
-              <span>سجل القيود العامة (GL)</span>
-            </Link>
-          </div>
-        </div>
-
-        {/* Floating Notification */}
-        {notification && (
-          <div className="mb-4 p-3 bg-secondary-container text-on-secondary-container rounded-xl flex items-center justify-between font-label-md text-xs font-bold shadow-sm animate-in fade-in">
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-[18px]">verified</span>
-              <span>{notification}</span>
-            </div>
-            <button type="button" onClick={() => setNotification(null)} className="cursor-pointer">
-              <span className="material-symbols-outlined text-[16px]">close</span>
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* KPI Metrics */}
-      <div className="px-space-lg">
-        <SettlementsMetricsCards metrics={metrics} />
-      </div>
-
-      {/* Tabs & Content Area */}
-      <div className="px-space-lg pb-space-xl space-y-space-md">
-        {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 bg-surface-container-lowest p-space-sm rounded-xl shadow-sm border border-surface-container-high/60">
-          <button
-            type="button"
-            onClick={() => setActiveTab('batches')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-label-lg text-xs transition-all cursor-pointer ${
-              activeTab === 'batches'
-                ? 'bg-secondary text-on-secondary font-bold shadow-sm'
-                : 'text-on-surface-variant hover:bg-surface-container-high'
-            }`}
-          >
-            <span className="material-symbols-outlined text-[18px]">currency_exchange</span>
-            <span>دورات التسوية المجمعة ({batches.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('carriers')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-label-lg text-xs transition-all cursor-pointer ${
-              activeTab === 'carriers'
-                ? 'bg-secondary text-on-secondary font-bold shadow-sm'
-                : 'text-on-surface-variant hover:bg-surface-container-high'
-            }`}
-          >
-            <span className="material-symbols-outlined text-[18px]">directions_bus</span>
-            <span>حصص شركات النقل ({carrierItems.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('brokers')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-label-lg text-xs transition-all cursor-pointer ${
-              activeTab === 'brokers'
-                ? 'bg-secondary text-on-secondary font-bold shadow-sm'
-                : 'text-on-surface-variant hover:bg-surface-container-high'
-            }`}
-          >
-            <span className="material-symbols-outlined text-[18px]">storefront</span>
-            <span>عمولات مكاتب الوكلاء ({brokerItems.length})</span>
-          </button>
-        </div>
-
-        {/* Tab View Render */}
-        {activeTab === 'batches' && (
-          <SettlementBatchesTable
-            batches={batches}
-            filters={filters}
-            onFilterChange={applyFilters}
-            onSelectBatchForApproval={(b) => setSelectedBatchForApproval(b)}
-            onExportBankakCsv={exportBankakCsv}
-            onExportSummaryCsv={exportSummaryCsv}
-          />
-        )}
-
-        {activeTab === 'carriers' && (
-          <CarrierPayoutsTable
-            items={carrierItems}
-            onDisburseCarrier={handleDisburseCarrier}
-          />
-        )}
-
-        {activeTab === 'brokers' && (
-          <BrokerCommissionsTable
-            items={brokerItems}
-            onCreditWallet={handleCreditWallet}
-            onDisburseBank={handleDisburseBrokerBank}
-          />
-        )}
-      </div>
-
-      {/* Approval Drawer */}
-      <SettlementApprovalDrawer
-        batch={selectedBatchForApproval}
-        isOpen={Boolean(selectedBatchForApproval)}
-        onClose={() => setSelectedBatchForApproval(null)}
-        onApprove={handleApproveBatch}
+    <div className="flex flex-col w-full pb-space-xl gap-space-md">
+      <Breadcrumbs items={[{ label: 'المالية والتسويات', path: '/financials/wallets' }, { label: 'العمولات والتسويات' }]} />
+      <PageHeader
+        title="عمولات الوكلاء والتسويات"
+        subtitle="تُستحق عمولة المكتب عند تأكيد الحجز. التسوية تحجز العمولات غير المسوّاة لفترة، ثم تُعتمد يدويًا بعد صرفها خارجيًا."
+        className="mb-0"
+        actions={can('commissions.payout') ? <Button icon="add" onClick={() => setCreateOpen(true)}>تسوية جديدة</Button> : null}
       />
+
+      <div className="flex flex-wrap items-center gap-space-sm">
+        <div className="flex gap-1 bg-surface-container rounded-lg p-1" role="tablist" aria-label="العرض">
+          {(
+            [
+              ['settlements', 'التسويات'],
+              ['accruals', 'سجل العمولات'],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              role="tab"
+              aria-selected={tab === key}
+              onClick={() => setTab(key)}
+              className={`px-3 py-1 rounded-md text-sm ${tab === key ? 'bg-surface-container-lowest shadow-sm font-semibold text-on-surface' : 'text-on-surface-variant'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <OfficeSelect offices={offices.data} value={officeId} onChange={setOfficeId} />
+      </div>
+
+      {tab === 'settlements' ? (
+        <SettlementsTab officeId={officeId} officeById={officeById} onOpen={setOpenId} />
+      ) : (
+        <AccrualsTab officeId={officeId} officeById={officeById} onOpenSettlement={setOpenId} />
+      )}
+
+      {createOpen && (
+        <CreateSettlementModal
+          onClose={() => setCreateOpen(false)}
+          onCreated={(s) => {
+            setCreateOpen(false);
+            setTab('settlements');
+            setOpenId(s.id);
+          }}
+        />
+      )}
+      {openId && <SettlementDrawer key={openId} id={openId} onClose={() => setOpenId(null)} />}
     </div>
+  );
+};
+
+type TabProps = { officeId: string; officeById: Map<string, OfficeRef> };
+
+const SettlementsTab: React.FC<TabProps & { onOpen: (id: string) => void }> = ({ officeId, officeById, onOpen }) => {
+  const [status, setStatus] = React.useState<SettlementStatus | ''>('');
+  const [page, setPage] = usePageReset(`${officeId}|${status}`);
+  const list = useSettlements({ page, pageSize: PAGE_SIZE, officeId: officeId || undefined, status: status || undefined });
+  const rows = list.data?.data ?? [];
+
+  return (
+    <section className="bg-surface-container-lowest border border-surface-container-high rounded-xl p-space-md space-y-space-sm">
+      <select aria-label="حالة التسوية" value={status} onChange={(e) => setStatus(e.target.value as SettlementStatus | '')} className={selectClass}>
+        <option value="">كل الحالات</option>
+        {(Object.keys(SETTLEMENT_STATUS_LABEL) as SettlementStatus[]).map((s) => (
+          <option key={s} value={s}>{SETTLEMENT_STATUS_LABEL[s]}</option>
+        ))}
+      </select>
+      {list.isLoading ? (
+        <Skeleton className="h-48 rounded-lg" />
+      ) : list.isError ? (
+        <ErrorState title="تعذّر تحميل التسويات" message={financeErrorMessage(list.error)} onRetry={() => list.refetch()} />
+      ) : rows.length === 0 ? (
+        <EmptyState title="لا توجد تسويات" description="أنشئ تسوية لمكتب وفترة لحجز عمولاته غير المسوّاة." icon="currency_exchange" />
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-on-surface-variant text-xs">
+              <tr className="text-right">
+                <th className="py-2 px-2 font-medium">المكتب</th>
+                <th className="py-2 px-2 font-medium">الفترة</th>
+                <th className="py-2 px-2 font-medium">الإجمالي</th>
+                <th className="py-2 px-2 font-medium">الحجوزات</th>
+                <th className="py-2 px-2 font-medium">الحالة</th>
+                <th className="py-2 px-2 font-medium">مرجع الصرف</th>
+                <th className="py-2 px-2 font-medium">أُنشئت</th>
+                <th className="py-2 px-2 font-medium" />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((s) => (
+                <tr key={s.id} className="border-t border-surface-container hover:bg-surface-container/50">
+                  <td className="py-2 px-2">
+                    <Link to={`/brokers/${s.officeId}`} className="font-semibold text-secondary">{officeById.get(s.officeId)?.name ?? s.officeCode ?? s.officeId}</Link>
+                  </td>
+                  <td className="py-2 px-2 tabular-nums whitespace-nowrap" dir="ltr">{formatPeriod(s.periodFrom, s.periodTo)}</td>
+                  <td className="py-2 px-2 tabular-nums font-semibold">{formatSdg(s.totalAmountMinor)}</td>
+                  <td className="py-2 px-2 tabular-nums">{s.accrualCount ?? '—'}</td>
+                  <td className="py-2 px-2"><Badge variant={SETTLEMENT_STATUS_VARIANT[s.status]}>{SETTLEMENT_STATUS_LABEL[s.status]}</Badge></td>
+                  <td className="py-2 px-2 font-mono text-xs" dir="ltr">{s.payoutReference ?? '—'}</td>
+                  <td className="py-2 px-2 text-on-surface-variant">{formatDateTime(s.createdAt)}</td>
+                  <td className="py-2 px-2 text-left">
+                    <Button size="sm" variant="ghost" onClick={() => onOpen(s.id)}>التفاصيل</Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <Pager meta={list.data?.meta} busy={list.isFetching} onPage={setPage} />
+    </section>
+  );
+};
+
+const AccrualsTab: React.FC<TabProps & { onOpenSettlement: (id: string) => void }> = ({ officeId, officeById, onOpenSettlement }) => {
+  const [status, setStatus] = React.useState<AccrualStatus | ''>('');
+  const [page, setPage] = usePageReset(`${officeId}|${status}`);
+  const list = useAccruals({ page, pageSize: PAGE_SIZE, officeId: officeId || undefined, status: status || undefined });
+  const rows = list.data?.data ?? [];
+  const summary = list.data?.meta?.summary as CommissionSummary | undefined;
+
+  return (
+    <>
+      {summary && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-space-md">
+          <MetricCard title="غير مسوّاة" value={formatSdg(summary.unsettledTotalMinor)} subValue={`${summary.unsettledCount} حجز`} icon="pending" />
+          <MetricCard title="محجوزة في مسودات" value={formatSdg(summary.reservedTotalMinor)} subValue={`${summary.reservedCount} حجز`} icon="lock_clock" />
+          <MetricCard title="مسوّاة (مصروفة)" value={formatSdg(summary.settledTotalMinor)} icon="task_alt" />
+          <MetricCard title="مستردة بسبب الإلغاء" value={formatSdg(summary.clawedBackTotalMinor)} icon="undo" />
+        </div>
+      )}
+      <section className="bg-surface-container-lowest border border-surface-container-high rounded-xl p-space-md space-y-space-sm">
+        <select aria-label="حالة العمولة" value={status} onChange={(e) => setStatus(e.target.value as AccrualStatus | '')} className={selectClass}>
+          <option value="">كل الحالات</option>
+          {(Object.keys(ACCRUAL_STATUS_LABEL) as AccrualStatus[]).map((s) => (
+            <option key={s} value={s}>{ACCRUAL_STATUS_LABEL[s]}</option>
+          ))}
+        </select>
+        {list.isLoading ? (
+          <Skeleton className="h-48 rounded-lg" />
+        ) : list.isError ? (
+          <ErrorState title="تعذّر تحميل العمولات" message={financeErrorMessage(list.error)} onRetry={() => list.refetch()} />
+        ) : rows.length === 0 ? (
+          <EmptyState title="لا توجد عمولات مطابقة" description="تُستحق العمولة تلقائيًا عند تأكيد حجز من مكتب وكيل." icon="currency_exchange" />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-on-surface-variant text-xs">
+                <tr className="text-right">
+                  <th className="py-2 px-2 font-medium">الحجز</th>
+                  <th className="py-2 px-2 font-medium">المكتب</th>
+                  <th className="py-2 px-2 font-medium">قيمة الحجز</th>
+                  <th className="py-2 px-2 font-medium">العمولة</th>
+                  <th className="py-2 px-2 font-medium">الحالة</th>
+                  <th className="py-2 px-2 font-medium">التسوية</th>
+                  <th className="py-2 px-2 font-medium">تأكيد الحجز</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((a) => (
+                  <tr key={a.id} className="border-t border-surface-container hover:bg-surface-container/50">
+                    <td className="py-2 px-2 font-mono text-xs" dir="ltr">
+                      <Link to={`/bookings/${a.bookingId}`} className="text-secondary">{a.bookingId.slice(-8).toUpperCase()}</Link>
+                    </td>
+                    <td className="py-2 px-2">
+                      <Link to={`/brokers/${a.officeId}`} className="text-secondary">{officeById.get(a.officeId)?.name ?? a.officeCode}</Link>
+                    </td>
+                    <td className="py-2 px-2 tabular-nums">{formatSdg(a.booking.totalAmountMinor)}</td>
+                    <td className="py-2 px-2 tabular-nums font-semibold">{formatSdg(a.amountMinor)}</td>
+                    <td className="py-2 px-2"><Badge variant={ACCRUAL_STATUS_VARIANT[a.status]} size="sm">{ACCRUAL_STATUS_LABEL[a.status]}</Badge></td>
+                    <td className="py-2 px-2">
+                      {a.settlementId ? (
+                        <button type="button" className="text-secondary text-xs" onClick={() => onOpenSettlement(a.settlementId!)}>عرض</button>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td className="py-2 px-2 text-on-surface-variant">{formatDateTime(a.booking.confirmedAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <Pager meta={list.data?.meta} busy={list.isFetching} onPage={setPage} />
+      </section>
+    </>
   );
 };

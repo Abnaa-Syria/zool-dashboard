@@ -15,8 +15,6 @@ import { AUDIT_ACTION_LABEL, RESOURCE_TYPE_LABEL, label } from '../labels';
 import { Pager } from '../components/AdminUi';
 
 const PAGE_SIZE = 25;
-/** Sudan is UTC+2 all year (no DST). */
-const SUDAN_OFFSET = '+02:00';
 
 const FILTER_KEYS = ['actorAdminId', 'action', 'resourceType', 'resourceId', 'requestId', 'from', 'to'] as const;
 type FilterKey = (typeof FILTER_KEYS)[number];
@@ -48,18 +46,15 @@ export const AuditTrailPage: React.FC = () => {
     resourceType: applied.resourceType || undefined,
     resourceId: applied.resourceId || undefined,
     requestId: applied.requestId || undefined,
-    from: applied.from ? `${applied.from}T00:00:00.000${SUDAN_OFFSET}` : undefined,
-    to: applied.to ? `${applied.to}T23:59:59.999${SUDAN_OFFSET}` : undefined,
+    // The API reads YYYY-MM-DD as whole Sudan calendar days (from = start, to = end of day).
+    from: applied.from || undefined,
+    to: applied.to || undefined,
   };
   const rangeInvalid = Boolean(draft.from && draft.to && draft.from > draft.to);
   const logs = useAuditLogs(filters);
 
-  // Actor names: the audit API returns only actorAdminId.
+  // Options for the actor filter only; entries carry their own resolved `actor`.
   const admins = useAdmins({ page: 1, pageSize: 100 }, can('admins.view'));
-  const actorName = React.useMemo(() => {
-    const m = new Map((admins.data?.data ?? []).map((a) => [a.id, a.displayName]));
-    return (id: string | null) => (id ? (m.get(id) ?? id.slice(-8)) : 'النظام');
-  }, [admins.data]);
 
   const apply = (next: Draft, nextPage = 1) => {
     const p = new URLSearchParams();
@@ -161,7 +156,7 @@ export const AuditTrailPage: React.FC = () => {
             {logs.data.data.map((l) => (
               <TableRow key={l.id} className="cursor-pointer" onClick={() => setSelected(l)}>
                 <TableCell className="text-xs text-on-surface-variant whitespace-nowrap">{formatDateTime(l.createdAt)}</TableCell>
-                <TableCell className="text-sm">{actorName(l.actorAdminId)}</TableCell>
+                <TableCell className="text-sm">{actorName(l)}</TableCell>
                 <TableCell>
                   <Badge size="sm" variant={/failed|rejected|reuse|suspended|deleted|revoked/.test(l.action) ? 'warning' : 'neutral'} title={l.action}>
                     {label(AUDIT_ACTION_LABEL, l.action)}
@@ -182,12 +177,17 @@ export const AuditTrailPage: React.FC = () => {
 
       <Drawer open={selected !== null} onOpenChange={(o) => !o && setSelected(null)}>
         <DrawerContent side="left" className="max-w-lg">
-          {selected && <AuditDetail log={selected} actor={actorName(selected.actorAdminId)} canViewAdmins={can('admins.view')} />}
+          {selected && <AuditDetail log={selected} canViewAdmins={can('admins.view')} />}
         </DrawerContent>
       </Drawer>
     </div>
   );
 };
+
+function actorName(log: AuditLog): string {
+  if (log.actor) return log.actor.displayName;
+  return log.actorAdminId ? log.actorAdminId.slice(-8) : 'النظام';
+}
 
 const Row: React.FC<{ k: string; v: React.ReactNode; mono?: boolean }> = ({ k, v, mono }) => (
   <div className="grid grid-cols-[110px_1fr] gap-2 py-1.5 border-b border-surface-container text-sm">
@@ -198,7 +198,7 @@ const Row: React.FC<{ k: string; v: React.ReactNode; mono?: boolean }> = ({ k, v
   </div>
 );
 
-const AuditDetail: React.FC<{ log: AuditLog; actor: string; canViewAdmins: boolean }> = ({ log, actor, canViewAdmins }) => (
+const AuditDetail: React.FC<{ log: AuditLog; canViewAdmins: boolean }> = ({ log, canViewAdmins }) => (
   <>
     <DrawerHeader>
       <DrawerTitle>{label(AUDIT_ACTION_LABEL, log.action)}</DrawerTitle>
@@ -212,10 +212,10 @@ const AuditDetail: React.FC<{ log: AuditLog; actor: string; canViewAdmins: boole
           v={
             log.actorAdminId && canViewAdmins ? (
               <Link to={`/admin/team/${log.actorAdminId}`} className="text-secondary">
-                {actor}
+                {actorName(log)}
               </Link>
             ) : (
-              actor
+              actorName(log)
             )
           }
         />

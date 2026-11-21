@@ -22,6 +22,19 @@ const MESSAGES: Record<string, string> = {
   TRIP_SEATS_TAKEN: 'توجد مقاعد محجوزة أو مباعة في هذه الرحلة.',
   TRIP_NOT_CANCELLABLE: 'لا يمكن إلغاء رحلة انطلقت بالفعل.',
   BOOKING_NOT_CANCELLABLE: 'لا يمكن إلغاء هذا الحجز في حالته الحالية.',
+  BOOKING_CHANNEL_UNSUPPORTED: 'إلغاء حجوزات تطبيق العميل من الإدارة غير متاح بعد.',
+  TOP_UP_BELOW_MINIMUM: 'مبلغ الشحن أقل من الحد الأدنى المسموح.',
+  TOP_UP_NOT_REVIEWABLE: 'لا يمكن مراجعة طلب الشحن هذا؛ تمت مراجعته مسبقًا أو ليس بانتظار المراجعة.',
+  BOOTSTRAP_PROTECTED: 'إجراء محظور لحماية المدير العام التأسيسي أو الأدوار النظامية.',
+  ROLE_IN_USE: 'لا يمكن حذف الدور لأنه ما زال مسندًا إلى مشرفين. أزل الدور عنهم أولًا.',
+  SETTLEMENT_OVERLAP: 'توجد تسوية أخرى تتداخل مع هذه الفترة.',
+  NOTHING_TO_SETTLE: 'لا توجد عمولات غير مسوّاة في هذه الفترة.',
+  HOLD_REQUIRED: 'يجب حجز المقاعد مؤقتًا قبل تأكيد الحجز.',
+  HOLD_EXPIRED: 'انتهت مهلة الحجز المؤقت للمقاعد. أعد اختيار المقاعد.',
+  EXPOSURE_CEILING_EXCEEDED: 'تم تجاوز سقف المديونية المسموح للمكتب.',
+  CARRIER_NOT_ASSIGNED: 'شركة النقل غير مُسندة لهذا المكتب.',
+  SEAT_UNAVAILABLE: 'مقعد أو أكثر لم يعد متاحًا.',
+  AUTH_AUTHZ_STALE: 'تغيّرت صلاحياتك. حدّث الصفحة أو سجّل الدخول مرة أخرى.',
 };
 
 export function errorMessage(error: unknown, fallback = 'حدث خطأ غير متوقع.'): string {

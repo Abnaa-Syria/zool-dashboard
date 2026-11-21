@@ -1,334 +1,160 @@
-import React, { useState } from 'react';
+import * as React from 'react';
 import { Link } from 'react-router-dom';
-import { useTopUpQueue, useWallets } from '../hooks/useFinancials';
-import { WalletDepositModal } from '../components/WalletDepositModal';
-import type { TopUpRequest } from '../types/financials';
+import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
+import { Badge } from '../../../components/ui/Badge';
+import { Button } from '../../../components/ui/Button';
+import { EmptyState, ErrorState } from '../../../components/ui/EmptyState';
+import { Modal, ModalContent, ModalDescription, ModalFooter, ModalHeader, ModalTitle } from '../../../components/ui/Modal';
+import { PageHeader } from '../../../components/ui/PageHeader';
+import { Skeleton } from '../../../components/ui/Skeleton';
+import { formatDateTime } from '../../../lib/dates';
+import { formatSdg } from '../../../lib/money';
+import { useAuth } from '../../auth/auth-context';
+import {
+  CONFIRMATION_PATH_LABEL,
+  TOP_UP_STATUS_LABEL,
+  TOP_UP_STATUS_VARIANT,
+  downloadTopUpEvidence,
+  financeErrorMessage,
+  useAdminTopUps,
+  useApproveTopUp,
+  useOfficeLookup,
+  useRejectTopUp,
+  type AdminTopUp,
+  type OfficeRef,
+  type TopUpStatus,
+} from '../api';
+import { Pager } from '../components/Pager';
+import { OfficeSelect } from '../components/OfficeSelect';
+import { selectClass, usePageReset } from '../listState';
 
+const PAGE_SIZE = 20;
+
+type Review = { kind: 'approve' | 'reject'; topUp: AdminTopUp };
+
+/**
+ * Manual top-up review (D-ADMIN-TOPUP-01): broker/admin-submitted receipts wait in PENDING_REVIEW;
+ * approval credits the wallet with the submitted amount (never edited), rejection marks it FAILED.
+ */
 export const TopUpQueuePage: React.FC = () => {
-  const { queue, approveRequest, rejectRequest, refresh } = useTopUpQueue();
-  const { recordTopUp, wallets } = useWallets();
+  const { can } = useAuth();
+  const [status, setStatus] = React.useState<TopUpStatus | ''>('PENDING_REVIEW');
+  const [officeId, setOfficeId] = React.useState('');
+  const [page, setPage] = usePageReset(`${status}|${officeId}`);
+  const [review, setReview] = React.useState<Review | null>(null);
+  const [notice, setNotice] = React.useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  const [downloading, setDownloading] = React.useState<string | null>(null);
 
-  const [selectedRequest, setSelectedRequest] = useState<TopUpRequest | null>(
-    queue.find((q) => q.status === 'pending') || queue[0] || null
-  );
-  const [filterText, setFilterText] = useState('');
-  const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
-  const [rejectReason, setRejectReason] = useState('');
-  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
-  const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null);
+  const offices = useOfficeLookup();
+  const officeById = React.useMemo(() => new Map((offices.data ?? []).map((o) => [o.id, o])), [offices.data]);
+  const topUps = useAdminTopUps({ page, pageSize: PAGE_SIZE, status: status || undefined, officeId: officeId || undefined });
+  const rows = topUps.data?.data ?? [];
 
-  const pendingRequests = queue.filter((r) => r.status === 'pending');
-  const filteredQueue = queue.filter((r) => {
-    if (!filterText) return true;
-    const lower = filterText.toLowerCase();
-    return (
-      r.brokerName.toLowerCase().includes(lower) ||
-      r.brokerId.toLowerCase().includes(lower) ||
-      r.bankReferenceNumber.toLowerCase().includes(lower) ||
-      r.id.toLowerCase().includes(lower)
-    );
-  });
+  const canApprove = can('wallets.topups.approve');
+  const canReject = can('wallets.topups.reject');
+  const canEvidence = can('wallets.topups.evidence.view');
 
-  const handleApprove = (req: TopUpRequest) => {
-    approveRequest(req.id, 'أحمد السر');
-    setActionSuccessMessage(`تم اعتماد شحن رصيد ${req.brokerName} بنجاح بمبلغ ${req.amountSdg.toLocaleString()} ج.س`);
-    setTimeout(() => setActionSuccessMessage(null), 4000);
-    // select next pending if available
-    const nextPending = pendingRequests.find((p) => p.id !== req.id);
-    setSelectedRequest(nextPending || null);
-  };
-
-  const handleConfirmReject = () => {
-    if (!selectedRequest) return;
-    rejectRequest(selectedRequest.id, rejectReason || 'عدم تطابق إشعار التحويل البنكي');
-    setIsRejectModalOpen(false);
-    setRejectReason('');
-    setActionSuccessMessage(`تم رفض طلب شحن ${selectedRequest.brokerName}`);
-    setTimeout(() => setActionSuccessMessage(null), 4000);
-    const nextPending = pendingRequests.find((p) => p.id !== selectedRequest.id);
-    setSelectedRequest(nextPending || null);
-  };
-
-  const getChannelBadge = (channel: TopUpRequest['channel']) => {
-    switch (channel) {
-      case 'bankak':
-        return (
-          <div className="flex items-center gap-1.5 text-on-surface">
-            <span className="material-symbols-outlined text-secondary text-[18px]">account_balance</span>
-            <span className="font-medium">تحويل بنكك</span>
-          </div>
-        );
-      case 'sadad':
-        return (
-          <div className="flex items-center gap-1.5 text-on-surface">
-            <span className="material-symbols-outlined text-tertiary text-[18px]">credit_card</span>
-            <span className="font-medium">سداد الإلكتروني</span>
-          </div>
-        );
-      case 'fauwr':
-        return (
-          <div className="flex items-center gap-1.5 text-on-surface">
-            <span className="material-symbols-outlined text-primary text-[18px]">flash_on</span>
-            <span className="font-medium">فوري المصرفي</span>
-          </div>
-        );
-      case 'cash_deposit':
-        return (
-          <div className="flex items-center gap-1.5 text-on-surface">
-            <span className="material-symbols-outlined text-tertiary text-[18px]">payments</span>
-            <span className="font-medium">إيداع نقدي مباشر</span>
-          </div>
-        );
-      default:
-        return <span>{channel}</span>;
+  async function download(id: string) {
+    setDownloading(id);
+    setNotice(null);
+    try {
+      await downloadTopUpEvidence(id);
+    } catch (e) {
+      setNotice({ tone: 'error', text: financeErrorMessage(e, 'تعذّر تنزيل الإيصال.') });
+    } finally {
+      setDownloading(null);
     }
-  };
+  }
 
   return (
-    <div className="flex flex-col w-full gap-space-lg p-space-lg">
-      {/* 1. Breadcrumbs & Header */}
-      <div className="flex flex-col gap-space-xs">
-        <nav className="flex items-center gap-2 text-on-surface-variant font-label-md text-label-md">
-          <Link to="/overview" className="hover:text-secondary transition-colors">
-            الرئيسية والعمليات
-          </Link>
-          <span className="material-symbols-outlined text-[14px] text-outline rotate-180">
-            chevron_left
-          </span>
-          <Link to="/financials/wallets" className="hover:text-secondary transition-colors">
-            المالية والتسويات
-          </Link>
-          <span className="material-symbols-outlined text-[14px] text-outline rotate-180">
-            chevron_left
-          </span>
-          <Link to="/financials/wallets" className="hover:text-secondary transition-colors">
-            المحافظ والمعاملات المالية
-          </Link>
-          <span className="material-symbols-outlined text-[14px] text-outline rotate-180">
-            chevron_left
-          </span>
-          <span className="text-tertiary font-bold">طابور مراجعة الحوالات البنكية</span>
-        </nav>
+    <div className="flex flex-col w-full pb-space-xl gap-space-md">
+      <Breadcrumbs items={[{ label: 'المالية والتسويات', path: '/financials/wallets' }, { label: 'مراجعة طلبات الشحن' }]} />
+      <PageHeader
+        title="مراجعة طلبات شحن المحافظ"
+        subtitle="طلبات الشحن اليدوية المرفقة بإيصال تحويل. الاعتماد يضيف المبلغ المقدَّم كما هو إلى محفظة المكتب؛ لا يمكن تعديل المبلغ."
+        className="mb-0"
+      />
 
-        <div className="flex flex-wrap items-center justify-between gap-space-md mt-1">
-          <div className="flex items-center gap-3">
-            <h1 className="font-display-md text-display-md text-on-surface tracking-tight font-bold">
-              طلبات شحن المحافظ والتحقق البنكي
-            </h1>
-            <span className="px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-md text-label-md flex items-center gap-1.5 shadow-sm">
-              <span className="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
-              <span>{pendingRequests.length} طلبات بانتظار المطابقة</span>
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => refresh()}
-              className="flex items-center gap-2 px-space-md py-2.5 rounded-lg bg-surface-container-lowest text-secondary hover:bg-surface-container-low transition-colors font-label-lg text-label-lg shadow-sm border border-surface-container-high"
-            >
-              <span className="material-symbols-outlined text-[18px]">cached</span>
-              <span>تحديث طابور المراجعة</span>
-            </button>
-            <button
-              onClick={() => setIsDepositModalOpen(true)}
-              className="flex items-center gap-2 px-space-md py-2.5 rounded-lg bg-primary-container text-on-primary hover:bg-primary transition-colors font-label-lg text-label-lg shadow-sm"
-            >
-              <span className="material-symbols-outlined text-[18px]">add_circle</span>
-              <span>+ تسجيل إيداع يدوي فوري</span>
-            </button>
-          </div>
-        </div>
+      <div className="flex flex-wrap items-center gap-space-sm">
+        <select aria-label="الحالة" value={status} onChange={(e) => setStatus(e.target.value as TopUpStatus | '')} className={selectClass}>
+          <option value="">كل الحالات</option>
+          {(Object.keys(TOP_UP_STATUS_LABEL) as TopUpStatus[]).map((s) => (
+            <option key={s} value={s}>{TOP_UP_STATUS_LABEL[s]}</option>
+          ))}
+        </select>
+        <OfficeSelect offices={offices.data} value={officeId} onChange={setOfficeId} />
+        {topUps.data?.meta && <span className="text-xs text-on-surface-variant">{topUps.data.meta.total.toLocaleString('en-US')} طلب</span>}
       </div>
 
-      {/* Success Notification Alert */}
-      {actionSuccessMessage && (
-        <div className="p-3 bg-secondary-fixed/50 text-secondary border border-secondary rounded-xl flex items-center gap-2 font-label-lg text-label-lg animate-in fade-in duration-200">
-          <span className="material-symbols-outlined text-[20px]">check_circle</span>
-          <span>{actionSuccessMessage}</span>
+      {notice && (
+        <div role="status" className={`rounded-lg px-3 py-2 text-sm ${notice.tone === 'success' ? 'bg-primary-fixed text-on-primary-fixed' : 'bg-error-container text-on-error-container'}`}>
+          {notice.text}
         </div>
       )}
 
-      {/* 2. Metric Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-space-md">
-        {/* Card 1 */}
-        <div className="bg-surface-container-lowest p-space-md rounded-xl shadow-sm flex items-center justify-between border border-surface-container-high">
-          <div className="flex flex-col gap-1">
-            <span className="font-label-md text-label-md text-on-surface-variant">طلبات قيد الانتظار</span>
-            <div className="flex items-baseline gap-2">
-              <span className="font-tabular-stat text-tabular-stat text-primary font-bold">
-                {pendingRequests.length}
-              </span>
-              <span className="font-label-md text-label-md text-on-surface-variant">
-                (إجمالي: 85,000 ج.س)
-              </span>
-            </div>
-            <span className="font-body-sm text-body-sm text-secondary flex items-center gap-1 mt-1">
-              <span className="material-symbols-outlined text-[14px]">info</span>
-              تتطلب مطابقة الإشعار البنكي
-            </span>
-          </div>
-          <div className="w-12 h-12 rounded-xl bg-primary-fixed flex items-center justify-center text-on-primary-fixed">
-            <span className="material-symbols-outlined text-[24px]">pending_actions</span>
-          </div>
-        </div>
-
-        {/* Card 2 */}
-        <div className="bg-surface-container-lowest p-space-md rounded-xl shadow-sm flex items-center justify-between border border-surface-container-high">
-          <div className="flex flex-col gap-1">
-            <span className="font-label-md text-label-md text-on-surface-variant">حوالات معتمدة اليوم</span>
-            <div className="flex items-baseline gap-2">
-              <span className="font-tabular-stat text-tabular-stat text-tertiary font-bold">28</span>
-              <span className="font-label-md text-label-md text-secondary">+14.2% عن الأمس</span>
-            </div>
-            <span className="font-body-sm text-body-sm text-on-surface-variant mt-1">
-              القيمة: 1,420,500 ج.س
-            </span>
-          </div>
-          <div className="w-12 h-12 rounded-xl bg-secondary-fixed flex items-center justify-center text-on-secondary-fixed">
-            <span className="material-symbols-outlined text-[24px]">check_circle</span>
-          </div>
-        </div>
-
-        {/* Card 3 */}
-        <div className="bg-surface-container-lowest p-space-md rounded-xl shadow-sm flex items-center justify-between border border-surface-container-high">
-          <div className="flex flex-col gap-1">
-            <span className="font-label-md text-label-md text-on-surface-variant">حوالات مرفوضة</span>
-            <div className="flex items-baseline gap-2">
-              <span className="font-tabular-stat text-tabular-stat text-on-surface font-bold">0</span>
-              <span className="font-label-md text-label-md text-secondary">سجل نظيف اليوم</span>
-            </div>
-            <span className="font-body-sm text-body-sm text-on-surface-variant mt-1">
-              انعدام محاولات الاحتيال
-            </span>
-          </div>
-          <div className="w-12 h-12 rounded-xl bg-surface-container-low flex items-center justify-center text-outline">
-            <span className="material-symbols-outlined text-[24px]">cancel</span>
-          </div>
-        </div>
-
-        {/* Card 4 */}
-        <div className="bg-surface-container-lowest p-space-md rounded-xl shadow-sm flex items-center justify-between border border-surface-container-high">
-          <div className="flex flex-col gap-1">
-            <span className="font-label-md text-label-md text-on-surface-variant">متوسط وقت المراجعة</span>
-            <div className="flex items-baseline gap-2">
-              <span className="font-tabular-stat text-tabular-stat text-tertiary font-bold">8 دقائق</span>
-              <span className="font-label-md text-label-md text-secondary">-3 دقائق تحسن</span>
-            </div>
-            <span className="font-body-sm text-body-sm text-secondary flex items-center gap-1 mt-1">
-              <span className="material-symbols-outlined text-[14px]">bolt</span>
-              تفعيل المطابقة التلقائية API
-            </span>
-          </div>
-          <div className="w-12 h-12 rounded-xl bg-tertiary-fixed flex items-center justify-center text-on-tertiary-fixed">
-            <span className="material-symbols-outlined text-[24px]">timer</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. Main Workflow Workspace (Split View with Drawer Active) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-lg items-start relative w-full">
-        {/* Queue Data Table (8 Cols) */}
-        <div className="lg:col-span-8 bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden min-w-0 border border-surface-container-high">
-          {/* Table Filters & Toolbar */}
-          <div className="p-space-md bg-surface-container-low flex flex-wrap items-center justify-between gap-space-md border-b border-surface-container-high">
-            <div className="flex items-center gap-space-sm flex-1 max-w-md">
-              <div className="relative w-full">
-                <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-outline text-[18px]">
-                  filter_list
-                </span>
-                <input
-                  type="text"
-                  value={filterText}
-                  onChange={(e) => setFilterText(e.target.value)}
-                  placeholder="تصفية حسب اسم الوكالة أو رقم الإشعار..."
-                  className="w-full h-9 pr-9 pl-4 bg-surface-container-lowest rounded-lg font-body-sm text-body-sm text-on-surface placeholder:text-outline focus:outline-none focus:ring-1 focus:ring-secondary border border-surface-container-high"
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-2 font-label-md text-label-md">
-              <span className="text-on-surface-variant">ترتيب: الأحدث أولاً</span>
-            </div>
-          </div>
-
-          {/* High-density Queue Table */}
-          <div className="overflow-x-auto w-full">
-            <table className="w-full text-right">
-              <thead>
-                <tr className="bg-surface-container-low text-on-surface-variant font-label-md text-label-md border-b border-surface-container-high">
-                  <th className="py-3 px-space-md font-medium">اسم الوكيل والكود</th>
-                  <th className="py-3 px-space-md font-medium">المبلغ المطلوب</th>
-                  <th className="py-3 px-space-md font-medium">قناة الإيداع</th>
-                  <th className="py-3 px-space-md font-medium">الرقم المرجعي للإشعار</th>
-                  <th className="py-3 px-space-md font-medium">حالة المراجعة</th>
-                  <th className="py-3 px-space-md font-medium text-center">الإجراء</th>
+      <section className="bg-surface-container-lowest border border-surface-container-high rounded-xl p-space-md">
+        {topUps.isLoading ? (
+          <Skeleton className="h-48 rounded-lg" />
+        ) : topUps.isError ? (
+          <ErrorState title="تعذّر تحميل طلبات الشحن" message={financeErrorMessage(topUps.error)} onRetry={() => topUps.refetch()} />
+        ) : rows.length === 0 ? (
+          <EmptyState
+            title={status === 'PENDING_REVIEW' && !officeId ? 'لا توجد طلبات بانتظار المراجعة' : 'لا توجد طلبات مطابقة'}
+            description="ستظهر هنا طلبات الشحن المرفقة بإيصال فور تقديمها."
+            icon="receipt_long"
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-on-surface-variant text-xs">
+                <tr className="text-right">
+                  <th className="py-2 px-2 font-medium">المكتب</th>
+                  <th className="py-2 px-2 font-medium">المبلغ</th>
+                  <th className="py-2 px-2 font-medium">مرجع التحويل</th>
+                  <th className="py-2 px-2 font-medium">المسار</th>
+                  <th className="py-2 px-2 font-medium">الحالة</th>
+                  <th className="py-2 px-2 font-medium">تاريخ الطلب</th>
+                  <th className="py-2 px-2 font-medium">الإجراءات</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-surface-container-low font-body-md text-body-md">
-                {filteredQueue.map((req) => {
-                  const isSelected = selectedRequest?.id === req.id;
-                  const isPending = req.status === 'pending';
+              <tbody>
+                {rows.map((t) => {
+                  const office = officeById.get(t.officeId);
+                  const reviewable = t.status === 'PENDING_REVIEW';
                   return (
-                    <tr
-                      key={req.id}
-                      onClick={() => setSelectedRequest(req)}
-                      className={`transition-colors cursor-pointer ${
-                        isSelected
-                          ? 'bg-secondary-fixed/30 hover:bg-secondary-fixed/40'
-                          : 'hover:bg-surface-container-low/60'
-                      }`}
-                    >
-                      <td className="py-3.5 px-space-md">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-lg bg-tertiary text-on-tertiary flex items-center justify-center font-bold text-label-sm">
-                            {req.brokerName.slice(0, 1)}
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="font-label-lg text-label-lg text-tertiary font-bold">
-                              {req.brokerName}
-                            </span>
-                            <span className="font-body-sm text-body-sm text-secondary font-mono">
-                              {req.brokerId}
-                            </span>
-                          </div>
+                    <tr key={t.id} className="border-t border-surface-container hover:bg-surface-container/50 align-top">
+                      <td className="py-2 px-2">
+                        <Link to={`/brokers/${t.officeId}`} className="font-semibold text-secondary">
+                          {office ? office.name : <span className="font-mono text-xs" dir="ltr">{t.officeId}</span>}
+                        </Link>
+                        {office && <div className="font-mono text-xs text-on-surface-variant" dir="ltr">{office.code}</div>}
+                      </td>
+                      <td className="py-2 px-2 tabular-nums font-semibold">{formatSdg(t.amountMinor)}</td>
+                      <td className="py-2 px-2 font-mono text-xs" dir="ltr">{t.paymentReferenceNormalized ?? t.providerRef ?? '—'}</td>
+                      <td className="py-2 px-2 text-xs">{CONFIRMATION_PATH_LABEL[t.confirmationPath] ?? t.confirmationPath}</td>
+                      <td className="py-2 px-2">
+                        <Badge variant={TOP_UP_STATUS_VARIANT[t.status]}>{TOP_UP_STATUS_LABEL[t.status]}</Badge>
+                        {t.confirmedAt && <div className="text-xs text-on-surface-variant mt-1">{formatDateTime(t.confirmedAt)}</div>}
+                      </td>
+                      <td className="py-2 px-2 text-on-surface-variant">{formatDateTime(t.createdAt)}</td>
+                      <td className="py-2 px-2">
+                        <div className="flex flex-wrap gap-1">
+                          {t.hasEvidence && canEvidence && (
+                            <Button size="sm" variant="outline" icon="download" isLoading={downloading === t.id} onClick={() => download(t.id)}>
+                              الإيصال
+                            </Button>
+                          )}
+                          {reviewable && canApprove && (
+                            <Button size="sm" icon="check" disabled={!t.hasEvidence} title={t.hasEvidence ? undefined : 'لا يوجد إيصال مرفق'} onClick={() => setReview({ kind: 'approve', topUp: t })}>
+                              اعتماد
+                            </Button>
+                          )}
+                          {reviewable && canReject && (
+                            <Button size="sm" variant="danger" icon="close" onClick={() => setReview({ kind: 'reject', topUp: t })}>
+                              رفض
+                            </Button>
+                          )}
                         </div>
-                      </td>
-                      <td className="py-3.5 px-space-md font-tabular-stat text-tabular-stat text-on-surface font-bold">
-                        {req.amountSdg.toLocaleString('en-US', { minimumFractionDigits: 2 })}{' '}
-                        <span className="font-label-md text-label-md text-on-surface-variant font-normal">
-                          ج.س
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-space-md">{getChannelBadge(req.channel)}</td>
-                      <td className="py-3.5 px-space-md font-mono text-body-sm text-tertiary font-semibold">
-                        {req.bankReferenceNumber}
-                      </td>
-                      <td className="py-3.5 px-space-md">
-                        {isPending ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-label-md text-xs bg-primary-fixed text-on-primary-fixed font-medium">
-                            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
-                            بانتظار المطابقة
-                          </span>
-                        ) : req.status === 'approved' ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-label-md text-xs bg-secondary-fixed text-on-secondary-fixed font-medium">
-                            <span className="material-symbols-outlined text-[14px]">check</span>
-                            معتمد
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-label-md text-xs bg-error-container text-on-error-container font-medium">
-                            مرفوض
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3.5 px-space-md text-center">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedRequest(req);
-                          }}
-                          className="px-3 py-1 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface font-label-md text-label-md transition-colors"
-                        >
-                          فحص الإشعار
-                        </button>
                       </td>
                     </tr>
                   );
@@ -336,169 +162,90 @@ export const TopUpQueuePage: React.FC = () => {
               </tbody>
             </table>
           </div>
-        </div>
+        )}
+        <Pager meta={topUps.data?.meta} busy={topUps.isFetching} onPage={setPage} />
+      </section>
 
-        {/* Verification Inspector Drawer (4 Cols) */}
-        <div className="lg:col-span-4 bg-surface-container-lowest rounded-xl p-space-md shadow-sm border border-surface-container-high flex flex-col gap-space-md sticky top-20">
-          {selectedRequest ? (
-            <>
-              <div className="flex items-center justify-between pb-space-xs border-b border-surface-container-high">
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-secondary text-[22px]">
-                    fact_check
-                  </span>
-                  <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface">
-                    فحص إشعار التحويل البنكي
-                  </h3>
-                </div>
-                <span className="font-mono text-xs text-outline">
-                  {selectedRequest.id}
-                </span>
-              </div>
-
-              {/* Broker Brief */}
-              <div className="bg-surface-container-low p-3 rounded-lg flex items-center justify-between">
-                <div>
-                  <div className="font-label-lg text-label-lg font-bold text-tertiary">
-                    {selectedRequest.brokerName}
-                  </div>
-                  <div className="font-body-sm text-body-sm text-outline font-mono">
-                    الكود: {selectedRequest.brokerId}
-                  </div>
-                </div>
-                <div className="text-left">
-                  <div className="font-label-md text-label-md text-on-surface-variant">المبلغ</div>
-                  <div className="font-tabular-stat text-label-lg font-bold text-secondary">
-                    {selectedRequest.amountSdg.toLocaleString()} ج.س
-                  </div>
-                </div>
-              </div>
-
-              {/* Slip Visual Simulation */}
-              <div className="border-2 border-dashed border-secondary/40 bg-surface rounded-xl p-4 flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-label-md text-label-md text-secondary font-bold flex items-center gap-1">
-                    <span className="material-symbols-outlined text-[16px]">receipt</span>
-                    إشعار عملية إلكترونية
-                  </span>
-                  <span className="font-mono text-xs text-outline">BOK Transfer</span>
-                </div>
-
-                <div className="space-y-1.5 font-mono text-xs text-on-surface-variant">
-                  <div className="flex justify-between">
-                    <span>المرجع البنكي:</span>
-                    <span className="font-bold text-on-surface">
-                      {selectedRequest.bankReferenceNumber}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>الحساب المحول منه:</span>
-                    <span>184****92</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>حساب ZoolGo المركزي:</span>
-                    <span>3049102 (BOK)</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>توقيت التحويل:</span>
-                    <span>اليوم 10:14 ص</span>
-                  </div>
-                </div>
-
-                <div className="p-2 bg-secondary-fixed/40 rounded text-center text-xs text-secondary font-semibold">
-                  ✓ تم التحقق الآلي من رقم العملية لدى البنك
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              {selectedRequest.status === 'pending' ? (
-                <div className="flex items-center gap-2 pt-2">
-                  <button
-                    onClick={() => handleApprove(selectedRequest)}
-                    className="flex-1 py-2.5 px-3 rounded-lg bg-secondary hover:bg-secondary/90 text-on-secondary font-label-lg text-label-lg font-bold shadow-sm transition-colors flex items-center justify-center gap-1.5"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">verified</span>
-                    <span>اعتماد وشحن المحفظة</span>
-                  </button>
-
-                  <button
-                    onClick={() => setIsRejectModalOpen(true)}
-                    className="py-2.5 px-3 rounded-lg bg-error-container hover:bg-error/20 text-on-error-container font-label-lg text-label-lg font-bold transition-colors flex items-center justify-center gap-1"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">close</span>
-                    <span>رفض</span>
-                  </button>
-                </div>
-              ) : (
-                <div className="p-3 bg-surface-container rounded-lg text-center text-on-surface-variant text-body-sm">
-                  هذا الطلب تمت مراجعته مسبقاً (
-                  <span className="font-bold">
-                    {selectedRequest.status === 'approved' ? 'معتمد' : 'مرفوض'}
-                  </span>
-                  ).
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="py-12 text-center text-outline">
-              اختر طلباً من الجدول لعرض بيانات الإشعار
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Reject Reason Dialog */}
-      {isRejectModalOpen && selectedRequest && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-          <div className="bg-surface-container-lowest rounded-xl p-space-lg shadow-xl max-w-md w-full border border-surface-container-high flex flex-col gap-4">
-            <div className="flex items-center gap-2 text-error">
-              <span className="material-symbols-outlined text-[24px]">warning</span>
-              <h3 className="font-headline-sm text-headline-sm font-bold">
-                تأكيد رفض طلب شحن الرصيد
-              </h3>
-            </div>
-            <p className="font-body-md text-body-md text-on-surface-variant">
-              يرجى كتابة سبب رفض إشعار التحويل البنكي الخاص بـ{' '}
-              <span className="font-bold text-on-surface">
-                {selectedRequest.brokerName}
-              </span>
-              :
-            </p>
-            <textarea
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              placeholder="مثال: رقم العملية غير متطابق مع كشف حساب البنك، أو الإشعار مكرر..."
-              rows={3}
-              className="w-full p-3 rounded-lg bg-surface-container-low border border-surface-container-high font-body-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-error/20"
-            />
-            <div className="flex items-center justify-end gap-2">
-              <button
-                onClick={() => setIsRejectModalOpen(false)}
-                className="px-4 py-2 rounded-lg bg-surface-container hover:bg-surface-container-high font-label-md text-on-surface"
-              >
-                إلغاء
-              </button>
-              <button
-                onClick={handleConfirmReject}
-                className="px-4 py-2 rounded-lg bg-error text-on-error hover:bg-error/90 font-label-md font-bold"
-              >
-                تأكيد الرفض
-              </button>
-            </div>
-          </div>
-        </div>
+      {review && (
+        <ReviewModal
+          review={review}
+          office={officeById.get(review.topUp.officeId)}
+          onClose={() => setReview(null)}
+          onDone={(text) => {
+            setReview(null);
+            setNotice({ tone: 'success', text });
+          }}
+        />
       )}
-
-      {/* Manual Deposit Modal Dialog */}
-      <WalletDepositModal
-        isOpen={isDepositModalOpen}
-        onClose={() => setIsDepositModalOpen(false)}
-        wallets={wallets}
-        onConfirmDeposit={(brokerId, amount, channel, refNum, notes) => {
-          recordTopUp(brokerId, amount, channel, refNum, notes);
-          setIsDepositModalOpen(false);
-        }}
-      />
     </div>
+  );
+};
+
+const ReviewModal: React.FC<{ review: Review; office: OfficeRef | undefined; onClose: () => void; onDone: (text: string) => void }> = ({
+  review,
+  office,
+  onClose,
+  onDone,
+}) => {
+  const approve = useApproveTopUp();
+  const reject = useRejectTopUp();
+  const [note, setNote] = React.useState('');
+  const { topUp, kind } = review;
+  const mutation = kind === 'approve' ? approve : reject;
+  const officeLabel = office ? `${office.name} (${office.code})` : topUp.officeId;
+
+  function submit() {
+    if (kind === 'approve') {
+      approve.mutate(topUp.id, {
+        onSuccess: (r) =>
+          onDone(r.replayed ? 'الطلب معتمد مسبقًا.' : `تم اعتماد الشحن. رصيد المحفظة الآن ${formatSdg(r.balanceMinor)}.`),
+      });
+    } else {
+      reject.mutate({ id: topUp.id, note: note.trim() || undefined }, { onSuccess: (r) => onDone(r.replayed ? 'الطلب مرفوض مسبقًا.' : 'تم رفض طلب الشحن.') });
+    }
+  }
+
+  return (
+    <Modal open onOpenChange={(o) => !o && onClose()}>
+      <ModalContent>
+        <ModalHeader>
+          <ModalTitle>{kind === 'approve' ? 'اعتماد طلب الشحن؟' : 'رفض طلب الشحن؟'}</ModalTitle>
+          <ModalDescription>يُسجَّل الإجراء في سجل التدقيق باسمك.</ModalDescription>
+        </ModalHeader>
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+          <dt className="text-on-surface-variant">المكتب</dt>
+          <dd>{officeLabel}</dd>
+          <dt className="text-on-surface-variant">المبلغ</dt>
+          <dd className="font-semibold tabular-nums">{formatSdg(topUp.amountMinor)}</dd>
+          <dt className="text-on-surface-variant">مرجع التحويل</dt>
+          <dd className="font-mono text-xs" dir="ltr">{topUp.paymentReferenceNormalized ?? '—'}</dd>
+        </dl>
+        {kind === 'approve' ? (
+          <p className="text-sm bg-surface-container rounded-lg p-3">
+            تأكّد من مطابقة الإيصال للمبلغ والمرجع قبل الاعتماد. سيُضاف <b>{formatSdg(topUp.amountMinor)}</b> إلى المحفظة فورًا ولا يمكن التراجع.
+          </p>
+        ) : (
+          <label className="flex flex-col gap-1 text-sm">
+            سبب الرفض (يظهر في السجل)
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              maxLength={500}
+              rows={3}
+              className="rounded-lg border border-outline-variant/60 bg-surface-container-lowest p-2 text-sm"
+              placeholder="مثال: الإيصال غير مقروء أو المبلغ لا يطابق التحويل"
+            />
+            <span className="text-xs text-on-surface-variant">{note.length}/500</span>
+          </label>
+        )}
+        {mutation.isError && <p className="text-xs text-error">{financeErrorMessage(mutation.error)}</p>}
+        <ModalFooter>
+          <Button variant="outline" onClick={onClose}>تراجع</Button>
+          <Button variant={kind === 'approve' ? 'primary' : 'danger'} isLoading={mutation.isPending} onClick={submit}>
+            {kind === 'approve' ? 'تأكيد الاعتماد' : 'تأكيد الرفض'}
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
   );
 };

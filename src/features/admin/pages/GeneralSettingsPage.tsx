@@ -7,7 +7,7 @@ import { Skeleton } from '../../../components/ui/Skeleton';
 import { formatDateTime } from '../../../lib/dates';
 import { formatSdg, minorToSdg, sdgToMinor } from '../../../lib/money';
 import { useAuth } from '../../auth/auth-context';
-import { adminErrorMessage, useSystemSettings, useUpdateSystemSettings, type SettingValue, type SystemSetting } from '../api';
+import { adminErrorMessage, useResetSystemSetting, useSystemSettings, useUpdateSystemSettings, type SettingValue, type SystemSetting } from '../api';
 import { SETTING_GROUPS, SETTING_LABEL, SETTING_OPTION_LABEL } from '../labels';
 import { InlineError } from '../components/AdminUi';
 
@@ -81,6 +81,7 @@ const SettingsForm: React.FC<{ settings: SystemSetting[] }> = ({ settings }) => 
   const { can } = useAuth();
   const readOnly = !can('settings.manage');
   const update = useUpdateSystemSettings();
+  const reset = useResetSystemSetting();
   const initial = React.useMemo(() => Object.fromEntries(settings.map((s) => [s.key, toDraft(s)])) as Draft, [settings]);
   const [draft, setDraft] = React.useState<Draft>(initial);
   const [savedCount, setSavedCount] = React.useState<number | null>(null);
@@ -125,7 +126,7 @@ const SettingsForm: React.FC<{ settings: SystemSetting[] }> = ({ settings }) => 
         )}
       </div>
 
-      <InlineError message={update.isError ? adminErrorMessage(update.error) : null} />
+      <InlineError message={update.isError ? adminErrorMessage(update.error) : reset.isError ? adminErrorMessage(reset.error) : null} />
       {savedCount !== null && !changed.length && <p className="text-xs text-secondary">تم حفظ {savedCount} إعداد.</p>}
 
       <div className="grid gap-space-md lg:grid-cols-2 items-start">
@@ -151,7 +152,14 @@ const SettingsForm: React.FC<{ settings: SystemSetting[] }> = ({ settings }) => 
                       setSavedCount(null);
                       setDraft((d) => ({ ...d, [s.key]: v }));
                     }}
-                    onResetDefault={() => setDraft((d) => ({ ...d, [s.key]: toDraft(s, s.defaultValue) }))}
+                    // Server-side reset (DELETE override). The refreshed list remounts the form, so it waits for unsaved edits.
+                    resetBlocked={changed.length > 0}
+                    resetting={reset.isPending && reset.variables === s.key}
+                    onResetDefault={() => {
+                      update.reset();
+                      setSavedCount(null);
+                      reset.mutate(s.key);
+                    }}
                   />
                 );
               })}
@@ -170,14 +178,16 @@ interface SettingFieldProps {
   changed: boolean;
   readOnly: boolean;
   onChange: (v: string | boolean) => void;
+  /** Unsaved edits exist elsewhere in the form. */
+  resetBlocked: boolean;
+  resetting: boolean;
   onResetDefault: () => void;
 }
 
-const SettingField: React.FC<SettingFieldProps> = ({ setting: s, value, error, changed, readOnly, onChange, onResetDefault }) => {
+const SettingField: React.FC<SettingFieldProps> = ({ setting: s, value, error, changed, readOnly, resetBlocked, resetting, onChange, onResetDefault }) => {
   const id = `setting-${s.key}`;
   const u = unit(s);
   const money = isMoney(s);
-  const draftEqualsDefault = value === toDraft(s, s.defaultValue);
 
   let control: React.ReactNode;
   if (s.type === 'boolean') {
@@ -260,9 +270,15 @@ const SettingField: React.FC<SettingFieldProps> = ({ setting: s, value, error, c
             {s.updatedBy ? ` بواسطة ${s.updatedBy.displayName}` : ''}
           </span>
         )}
-        {!readOnly && !draftEqualsDefault && (
-          <button type="button" onClick={onResetDefault} className="text-secondary hover:underline">
-            استعادة الافتراضي
+        {!readOnly && !s.isDefault && (
+          <button
+            type="button"
+            onClick={onResetDefault}
+            disabled={resetBlocked || resetting}
+            title={resetBlocked ? 'احفظ التغييرات الحالية أو تراجع عنها أولًا' : 'حذف القيمة المخزنة والعودة إلى القيمة الافتراضية'}
+            className="text-secondary hover:underline disabled:opacity-50 disabled:no-underline disabled:cursor-not-allowed"
+          >
+            {resetting ? 'جارٍ الاستعادة…' : 'استعادة الافتراضي'}
           </button>
         )}
       </div>

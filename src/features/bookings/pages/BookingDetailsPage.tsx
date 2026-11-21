@@ -8,7 +8,6 @@ import { Modal, ModalContent, ModalDescription, ModalFooter, ModalHeader, ModalT
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { Skeleton } from '../../../components/ui/Skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../components/ui/Table';
-import { ApiError } from '../../../lib/api/client';
 import { errorMessage } from '../../../lib/api/errors';
 import { formatDateTime } from '../../../lib/dates';
 import { formatSdg } from '../../../lib/money';
@@ -44,11 +43,6 @@ const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, 
     <dd className="text-on-surface font-medium text-left">{children}</dd>
   </div>
 );
-
-function cancelErrorMessage(err: unknown): string {
-  if (err instanceof ApiError && err.code === 'BOOKING_CHANNEL_UNSUPPORTED') return 'الإلغاء الإداري متاح لحجوزات مكاتب الوكلاء فقط.';
-  return errorMessage(err);
-}
 
 const CancelBookingModal: React.FC<{ booking: AdminBooking; open: boolean; onOpenChange: (open: boolean) => void }> = ({ booking, open, onOpenChange }) => {
   const cancel = useCancelAdminBooking();
@@ -102,7 +96,7 @@ const CancelBookingModal: React.FC<{ booking: AdminBooking; open: boolean; onOpe
               placeholder="مثال: طلب العميل عبر المكتب بعد تعطل الرحلة"
             />
             {reason.length > 0 && !valid && <p className="text-xs text-error">السبب يجب أن يكون 3 أحرف على الأقل.</p>}
-            {cancel.isError && <p role="alert" className="text-sm text-error">{cancelErrorMessage(cancel.error)}</p>}
+            {cancel.isError && <p role="alert" className="text-sm text-error">{errorMessage(cancel.error)}</p>}
           </form>
         )}
 
@@ -234,7 +228,9 @@ export const BookingDetailsPage: React.FC = () => {
           <Section title="العميل" icon="person">
             <dl>
               <Field label="القناة">تطبيق العميل</Field>
-              <Field label="معرّف العميل"><span className="font-mono text-xs" dir="ltr">{b.customerId ?? '—'}</span></Field>
+              <Field label="اسم العميل">{b.customer?.displayName ?? '—'}</Field>
+              <Field label="هاتف العميل"><span className="font-mono text-xs" dir="ltr">{b.customer?.phone ?? '—'}</span></Field>
+              <Field label="معرّف العميل"><span className="font-mono text-xs" dir="ltr">{b.customer?.id ?? b.customerId ?? '—'}</span></Field>
             </dl>
           </Section>
         )}
@@ -254,6 +250,11 @@ export const BookingDetailsPage: React.FC = () => {
             <Field label="أُنشئ">{formatDateTime(b.createdAt)}</Field>
             <Field label="أُكّد">{formatDateTime(b.confirmedAt)}</Field>
             <Field label="أُلغي">{formatDateTime(b.cancelledAt)}</Field>
+            {b.status === 'CANCELLED' && (
+              <Field label="سبب الإلغاء">
+                <span className="whitespace-pre-wrap break-words">{b.cancelReason || '—'}</span>
+              </Field>
+            )}
             <Field label="معرّف الحجز"><span className="font-mono text-xs" dir="ltr">{b.id}</span></Field>
           </dl>
         </Section>

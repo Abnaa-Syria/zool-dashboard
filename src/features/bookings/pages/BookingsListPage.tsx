@@ -98,7 +98,7 @@ export const BookingsListPage: React.FC = () => {
             <Input
               label="بحث"
               startIcon="search"
-              placeholder="معرّف الحجز، رقم التذكرة، اسم أو هاتف الراكب"
+              placeholder="رقم الحجز، معرّف الحجز، رقم التذكرة، اسم أو هاتف الراكب"
               value={search}
               maxLength={64}
               onChange={(e) => setSearch(e.target.value)}

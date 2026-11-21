@@ -34,12 +34,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [queryClient]);
 
+  const refreshProfile = React.useCallback(async () => {
+    // A stale token (authz version bumped) is refreshed and retried by the API client.
+    const { data } = await api.get<AdminProfile>('/auth/me');
+    setAdmin(data);
+  }, []);
+
   const value = React.useMemo<AuthState>(() => {
     const permissions = new Set(admin?.permissions ?? []);
     return {
       status,
       admin,
       can: (p) => permissions.has(p),
+      refreshProfile,
       requestOtp: async (phone) => (await api.post<OtpChallenge>('/auth/otp/request', { phone }, { noRetry: true })).data,
       verifyOtp: async (input) => {
         const { data } = await api.post<TokensDto>('/auth/otp/verify', input, { noRetry: true });
@@ -58,7 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       },
     };
-  }, [status, admin, queryClient]);
+  }, [status, admin, queryClient, refreshProfile]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

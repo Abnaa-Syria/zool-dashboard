@@ -97,6 +97,8 @@ const RoleDetails: React.FC<{ role: Role; roles: Role[]; onDeleted: () => void }
   const readOnlyMatrix = role.isSystem || !can('permissions.assign');
   const canUpdate = !role.isSystem && can('roles.update');
   const canDelete = !role.isSystem && can('roles.delete');
+  // The API refuses (409 ROLE_IN_USE) while the role still has members.
+  const deleteBlocked = role.memberCount > 0;
 
   return (
     <div className="space-y-space-md min-w-0">
@@ -115,7 +117,14 @@ const RoleDetails: React.FC<{ role: Role; roles: Role[]; onDeleted: () => void }
               </>
             )}
             {canDelete && (
-              <Button size="sm" variant="danger" icon="delete" onClick={() => (del.reset(), setConfirm('delete'))}>
+              <Button
+                size="sm"
+                variant="danger"
+                icon="delete"
+                disabled={deleteBlocked}
+                title={deleteBlocked ? `لا يمكن الحذف: الدور مسند إلى ${role.memberCount} مشرف` : undefined}
+                onClick={() => (del.reset(), setConfirm('delete'))}
+              >
                 حذف
               </Button>
             )}
@@ -130,6 +139,11 @@ const RoleDetails: React.FC<{ role: Role; roles: Role[]; onDeleted: () => void }
           <span className="text-outline">آخر تحديث {formatDateTime(role.updatedAt)}</span>
         </div>
         {role.description && <p className="text-sm text-on-surface-variant">{role.description}</p>}
+        {canDelete && deleteBlocked && (
+          <p className="text-[11px] text-on-surface-variant">
+            لا يمكن حذف هذا الدور لأنه مسند إلى {role.memberCount} مشرف. أزل الدور عن أعضائه من صفحة فريق الإدارة أولًا، أو عطّله بدلًا من حذفه.
+          </p>
+        )}
       </Section>
 
       <Section
@@ -195,11 +209,7 @@ const RoleDetails: React.FC<{ role: Role; roles: Role[]; onDeleted: () => void }
         open={confirm === 'delete'}
         onOpenChange={(o) => !o && setConfirm(null)}
         title={`حذف دور ${role.name}؟`}
-        description={
-          role.memberCount > 0
-            ? `هذا الدور مسند إلى ${role.memberCount} مشرف وسيفقدون صلاحياته فورًا. لا يمكن التراجع.`
-            : 'سيُحذف الدور نهائيًا. لا يمكن التراجع.'
-        }
+        description="سيُحذف الدور نهائيًا. لا يمكن التراجع."
         confirmText="حذف الدور"
         danger
         isLoading={del.isPending}

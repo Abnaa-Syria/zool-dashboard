@@ -38,6 +38,7 @@ function describeMetadata(entry: AuditLogEntry): string[] {
 }
 
 function actorLabel(entry: AuditLogEntry): string {
+  if (entry.actor) return `مسؤول: ${entry.actor.displayName}`;
   if (entry.actorAdminId) return `مسؤول (${entry.actorAdminId.slice(-8)})`;
   const m = entry.metadata ?? {};
   if (typeof m.employeeId === 'string') return `موظف المكتب (${m.employeeId.slice(-8)})`;
