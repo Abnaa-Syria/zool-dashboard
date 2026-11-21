@@ -68,7 +68,7 @@ export interface ErrorStateProps {
 export const ErrorState: React.FC<ErrorStateProps> = ({
   title = 'تعذّر تحميل البيانات التشغيلية',
   message = 'حدث خطأ أثناء الاتصال بمزود البيانات أو انتهت مهلة الاستجابة. يرجى المحاولة مرة أخرى.',
-  diagnosticCode = 'ERR_NETWORK_DISPATCH_TIMEOUT',
+  diagnosticCode,
   onRetry,
   className,
 }) => {

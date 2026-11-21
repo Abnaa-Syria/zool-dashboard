@@ -19,7 +19,7 @@ export const navigationConfig: NavSection[] = [
   {
     title: 'الرئيسية والعمليات',
     items: [
-      { name: 'نظرة عامة', path: '/overview', icon: 'grid_view', permission: 'bookings.view', data: 'mock' },
+      { name: 'نظرة عامة', path: '/overview', icon: 'grid_view', permission: 'bookings.view', data: 'live' },
       { name: 'التتبع المباشر', path: '/tracking', icon: 'share_location', data: 'mock' },
       { name: 'الحجوزات والتذاكر', path: '/bookings', icon: 'confirmation_number', permission: 'bookings.view', data: 'mock' },
       { name: 'شركات النقل', path: '/companies', icon: 'departure_board', permission: 'carriers.view', data: 'mock' },
