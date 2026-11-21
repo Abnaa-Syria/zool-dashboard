@@ -14,6 +14,38 @@ interface CarrierShareBarChartProps {
   carriers: CarrierPerformanceSummary[];
 }
 
+const CustomTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const item = payload[0].payload;
+    return (
+      <div className="bg-surface-container-lowest p-3 rounded-xl shadow-lg border border-surface-container-high text-right min-w-[220px]">
+        <div className="font-bold text-xs text-on-surface mb-2 pb-1 border-b border-surface-container">
+          {item.fullName}
+        </div>
+        <div className="space-y-1 text-xs font-tabular-stat">
+          <div className="flex justify-between">
+            <span className="font-bold text-secondary">{item.salesM}M ج.س</span>
+            <span className="text-on-surface-variant">مبيعات التذاكر:</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="font-bold text-on-surface">{item.netPayableM}M ج.س</span>
+            <span className="text-on-surface-variant">صافي المستحق:</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="font-bold text-primary">{item.commissionM}M ج.س</span>
+            <span className="text-on-surface-variant">عمولة المنصة:</span>
+          </div>
+          <div className="flex justify-between pt-1 border-t border-surface-container">
+            <span className="font-bold text-secondary font-mono">{item.marketShare}%</span>
+            <span className="text-on-surface-variant">الحصة السوقية:</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
 export const CarrierShareBarChart: React.FC<CarrierShareBarChartProps> = ({ carriers }) => {
   const chartData = carriers.map((c) => ({
     name: c.carrierName.replace('شركة ', '').replace(' للنقل الجماعي', '').replace(' للنقل البري المتميز', ''),
@@ -24,38 +56,6 @@ export const CarrierShareBarChart: React.FC<CarrierShareBarChartProps> = ({ carr
     marketShare: c.marketSharePercent,
     occupancy: c.occupancyRatePercent,
   }));
-
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      const item = payload[0].payload;
-      return (
-        <div className="bg-surface-container-lowest p-3 rounded-xl shadow-lg border border-surface-container-high text-right min-w-[220px]">
-          <div className="font-bold text-xs text-on-surface mb-2 pb-1 border-b border-surface-container">
-            {item.fullName}
-          </div>
-          <div className="space-y-1 text-xs font-tabular-stat">
-            <div className="flex justify-between">
-              <span className="font-bold text-secondary">{item.salesM}M ج.س</span>
-              <span className="text-on-surface-variant">مبيعات التذاكر:</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="font-bold text-on-surface">{item.netPayableM}M ج.س</span>
-              <span className="text-on-surface-variant">صافي المستحق:</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="font-bold text-primary">{item.commissionM}M ج.س</span>
-              <span className="text-on-surface-variant">عمولة المنصة:</span>
-            </div>
-            <div className="flex justify-between pt-1 border-t border-surface-container">
-              <span className="font-bold text-secondary font-mono">{item.marketShare}%</span>
-              <span className="text-on-surface-variant">الحصة السوقية:</span>
-            </div>
-          </div>
-        </div>
-      );
-    }
-    return null;
-  };
 
   return (
     <div className="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm border border-surface-container-high space-y-space-md">

@@ -28,20 +28,17 @@ export const TicketPreviewModal: React.FC<TicketPreviewModalProps> = ({
   // Single-run stage management: starts at 'printing' when modal opens, finishes to 'complete'
   const [stage, setStage] = React.useState<ReceiptPrinterStage>('printing');
   const [feedMotion, setFeedMotion] = React.useState<ReceiptFeedMotion>('stepped');
-  const hasInitializedRef = React.useRef(false);
-
-  // Initialize printing once per modal open
-  React.useEffect(() => {
+  // Start printing once per modal open; reset the ticket selection on close
+  // (adjusted during render instead of in an effect).
+  const [wasOpen, setWasOpen] = React.useState(false);
+  if (wasOpen !== isOpen) {
+    setWasOpen(isOpen);
     if (isOpen) {
-      if (!hasInitializedRef.current) {
-        hasInitializedRef.current = true;
-        setStage('printing');
-      }
+      setStage('printing');
     } else {
-      hasInitializedRef.current = false;
       setUserSelectedIdx(null);
     }
-  }, [isOpen]);
+  }
 
   if (!isOpen) return null;
 

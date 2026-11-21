@@ -15,6 +15,49 @@ interface CashFlowChartProps {
   data: CashFlowWeekPoint[];
 }
 
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    const gmv = payload.find((p: any) => p.dataKey === 'gmvSdg')?.value || 0;
+    const commissions = payload.find((p: any) => p.dataKey === 'agentCommissionsSdg')?.value || 0;
+    const takeRate = payload.find((p: any) => p.dataKey === 'takeRateSdg')?.value || 0;
+    const isPeak = payload[0]?.payload?.isPeak;
+
+    return (
+      <div className="bg-surface-container-lowest p-3 rounded-xl shadow-lg border border-surface-container-high text-right min-w-[200px]">
+        <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-surface-container">
+          <span className="font-bold text-on-surface text-xs">{label}</span>
+          {isPeak && (
+            <span className="px-1.5 py-0.5 rounded text-[10px] bg-primary text-on-primary font-bold">
+              ذروة الموسم
+            </span>
+          )}
+        </div>
+        <div className="space-y-1 text-xs font-tabular-stat">
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-secondary font-bold">
+              {gmv.toLocaleString('en-US')} ج.س
+            </span>
+            <span className="text-on-surface-variant font-normal">حجم التداول:</span>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-secondary-fixed-dim font-bold">
+              {commissions.toLocaleString('en-US')} ج.س
+            </span>
+            <span className="text-on-surface-variant font-normal">عمولات الوكلاء:</span>
+          </div>
+          <div className="flex items-center justify-between gap-4 pt-1 border-t border-surface-container">
+            <span className="text-primary font-bold">
+              {takeRate.toLocaleString('en-US')} ج.س
+            </span>
+            <span className="text-on-surface-variant font-normal">صافي المنصة (5%):</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
 export const CashFlowChart: React.FC<CashFlowChartProps> = ({ data }) => {
   const formatSdgCompact = (val: number) => {
     if (val >= 1000000) {
@@ -24,49 +67,6 @@ export const CashFlowChart: React.FC<CashFlowChartProps> = ({ data }) => {
       return `${(val / 1000).toFixed(0)}k`;
     }
     return val.toString();
-  };
-
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      const gmv = payload.find((p: any) => p.dataKey === 'gmvSdg')?.value || 0;
-      const commissions = payload.find((p: any) => p.dataKey === 'agentCommissionsSdg')?.value || 0;
-      const takeRate = payload.find((p: any) => p.dataKey === 'takeRateSdg')?.value || 0;
-      const isPeak = payload[0]?.payload?.isPeak;
-
-      return (
-        <div className="bg-surface-container-lowest p-3 rounded-xl shadow-lg border border-surface-container-high text-right min-w-[200px]">
-          <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-surface-container">
-            <span className="font-bold text-on-surface text-xs">{label}</span>
-            {isPeak && (
-              <span className="px-1.5 py-0.5 rounded text-[10px] bg-primary text-on-primary font-bold">
-                ذروة الموسم
-              </span>
-            )}
-          </div>
-          <div className="space-y-1 text-xs font-tabular-stat">
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-secondary font-bold">
-                {gmv.toLocaleString('en-US')} ج.س
-              </span>
-              <span className="text-on-surface-variant font-normal">حجم التداول:</span>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-secondary-fixed-dim font-bold">
-                {commissions.toLocaleString('en-US')} ج.س
-              </span>
-              <span className="text-on-surface-variant font-normal">عمولات الوكلاء:</span>
-            </div>
-            <div className="flex items-center justify-between gap-4 pt-1 border-t border-surface-container">
-              <span className="text-primary font-bold">
-                {takeRate.toLocaleString('en-US')} ج.س
-              </span>
-              <span className="text-on-surface-variant font-normal">صافي المنصة (5%):</span>
-            </div>
-          </div>
-        </div>
-      );
-    }
-    return null;
   };
 
   return (

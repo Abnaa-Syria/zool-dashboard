@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import type { BrokerWalletSummary, PaymentChannel } from '../types/financials';
 
 interface WalletDepositModalProps {
@@ -28,13 +28,16 @@ export const WalletDepositModal: React.FC<WalletDepositModalProps> = ({
   const [referenceNumber, setReferenceNumber] = useState('');
   const [notes, setNotes] = useState('');
 
-  useEffect(() => {
-    if (selectedWallet) {
-      setBrokerId(selectedWallet.brokerId);
-    } else if (wallets.length > 0 && !brokerId) {
-      setBrokerId(wallets[0].brokerId);
-    }
-  }, [selectedWallet, wallets, brokerId]);
+  // Pick the broker from the selected wallet, else default to the first wallet
+  // (adjusted during render instead of in an effect).
+  const [syncedWallet, setSyncedWallet] = useState<typeof selectedWallet | undefined>(undefined);
+  if (syncedWallet !== selectedWallet) {
+    setSyncedWallet(selectedWallet);
+    if (selectedWallet) setBrokerId(selectedWallet.brokerId);
+  }
+  if (!selectedWallet && !brokerId && wallets.length > 0) {
+    setBrokerId(wallets[0].brokerId);
+  }
 
   if (!isOpen) return null;
 

@@ -6,7 +6,7 @@ import { mockVehicles, mockTrips } from '../fixtures/trackingFixtures';
 import { CORRIDOR_ROUTES } from '../fixtures/geoRoutes';
 import { telemetryService } from '../services/telemetrySimulator';
 import type { LiveTelemetry } from '../types/tracking';
-import { MAP_CONFIG } from '../components/FleetMap';
+import { MAP_CONFIG } from '../mapConfig';
 
 export const VehicleDetailsPage: React.FC = () => {
   const { vehicleId } = useParams<{ vehicleId: string }>();

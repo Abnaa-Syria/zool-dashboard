@@ -12,25 +12,25 @@ interface SalesChannelDonutChartProps {
   channels: SalesChannelShare[];
 }
 
-export const SalesChannelDonutChart: React.FC<SalesChannelDonutChartProps> = ({ channels }) => {
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload as SalesChannelShare;
-      return (
-        <div className="bg-surface-container-lowest p-2.5 rounded-lg shadow-md border border-surface-container-high text-right">
-          <div className="font-bold text-xs text-on-surface">{data.name}</div>
-          <div className="text-xs font-tabular-stat text-secondary font-bold mt-1">
-            {data.amountSdg.toLocaleString('en-US')} ج.س
-          </div>
-          <div className="text-[11px] text-on-surface-variant font-mono">
-            {data.percentage}% من إجمالي المبيعات
-          </div>
+const CustomTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload as SalesChannelShare;
+    return (
+      <div className="bg-surface-container-lowest p-2.5 rounded-lg shadow-md border border-surface-container-high text-right">
+        <div className="font-bold text-xs text-on-surface">{data.name}</div>
+        <div className="text-xs font-tabular-stat text-secondary font-bold mt-1">
+          {data.amountSdg.toLocaleString('en-US')} ج.س
         </div>
-      );
-    }
-    return null;
-  };
+        <div className="text-[11px] text-on-surface-variant font-mono">
+          {data.percentage}% من إجمالي المبيعات
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
 
+export const SalesChannelDonutChart: React.FC<SalesChannelDonutChartProps> = ({ channels }) => {
   return (
     <div className="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm border border-surface-container-high space-y-space-md">
       <div className="flex items-center justify-between">

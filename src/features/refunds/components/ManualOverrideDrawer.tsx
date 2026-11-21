@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import type { RefundChannel, RefundRequest } from '../types/refunds';
 
 interface ManualOverrideDrawerProps {
@@ -35,7 +35,11 @@ export const ManualOverrideDrawer: React.FC<ManualOverrideDrawerProps> = ({
   const [notifySms, setNotifySms] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
+  // Load the selected request into the form whenever the selection changes
+  // (adjusted during render instead of in an effect).
+  const [loadedRequest, setLoadedRequest] = useState<typeof selectedRequest | undefined>(undefined);
+  if (loadedRequest !== selectedRequest) {
+    setLoadedRequest(selectedRequest);
     if (selectedRequest) {
       setTicketNumber(selectedRequest.ticketNumber);
       if (selectedRequest.justificationNotes) {
@@ -44,7 +48,7 @@ export const ManualOverrideDrawer: React.FC<ManualOverrideDrawerProps> = ({
     } else {
       setTicketNumber('ZL-854921');
     }
-  }, [selectedRequest]);
+  }
 
   if (!isOpen) return null;
 

@@ -11,16 +11,8 @@ import { BusMarker } from './BusMarker';
 import { RouteLayer } from './RouteLayer';
 import { MapControls } from './MapControls';
 import { MapLegend } from './MapLegend';
+import { MAP_CONFIG } from '../mapConfig';
 
-export const MAP_CONFIG = {
-  tileUrl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-  attribution:
-    '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
-  maxZoom: 18,
-  minZoom: 5,
-  defaultCenter: [16.5, 33.5] as [number, number], // Central Sudan transit hub
-  defaultZoom: 7,
-};
 
 export interface FleetMapProps {
   vehicles: Vehicle[];
@@ -112,7 +104,8 @@ export const FleetMap: React.FC<FleetMapProps> = ({
   isSidebarCollapsed,
   hasDrawerOpen,
 }) => {
-  const [isFollowing, setIsFollowing] = React.useState(false);
+  const [isFollowing, setIsFollowing] = React.useState(Boolean(selectedVehicleId));
+  const [followedSelection, setFollowedSelection] = React.useState(selectedVehicleId);
   const [isFullscreen, setIsFullscreen] = React.useState(false);
   const [tileError, setTileError] = React.useState(false);
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -123,14 +116,12 @@ export const FleetMap: React.FC<FleetMapProps> = ({
     ? vehicles.find((v) => v.id === selectedVehicleId)
     : undefined;
 
-  // Auto-enable follow mode when selecting a vehicle
-  React.useEffect(() => {
-    if (selectedVehicleId) {
-      setIsFollowing(true);
-    } else {
-      setIsFollowing(false);
-    }
-  }, [selectedVehicleId]);
+  // Follow mode tracks the selection: on when a vehicle is selected, off when cleared
+  // (adjusted during render instead of in an effect).
+  if (followedSelection !== selectedVehicleId) {
+    setFollowedSelection(selectedVehicleId);
+    setIsFollowing(Boolean(selectedVehicleId));
+  }
 
   // Handle Fullscreen Toggle
   const handleToggleFullscreen = () => {

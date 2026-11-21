@@ -15,11 +15,13 @@ export const GeneralSettingsPage: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'operations' | 'financials' | 'notifications' | 'security' | 'system'>('operations');
   const [formState, setFormState] = useState<PlatformSettings>(settings);
+  const [syncedSettings, setSyncedSettings] = useState<PlatformSettings>(settings);
 
-  // Sync if settings updated externally
-  React.useEffect(() => {
+  // Re-sync the form when settings are updated externally (during render, not in an effect)
+  if (syncedSettings !== settings) {
+    setSyncedSettings(settings);
     setFormState(settings);
-  }, [settings]);
+  }
 
   const handleSave = () => {
     updateSettings(formState);

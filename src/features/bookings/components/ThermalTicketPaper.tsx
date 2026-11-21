@@ -12,7 +12,8 @@ interface ThermalTicketPaperProps {
 }
 
 /**
- * Authentic Thermal Barcode matching the reference image
+ * Thermal barcode visual. NOTE: the bars are decorative and do NOT encode `value` yet;
+ * replace with a real Code128 renderer when tickets come from the API (MASTER_PLAN phase 4).
  */
 function ThermalBarcodeSVG({ value }: { value: string }) {
   const barSegments = React.useMemo(() => {
@@ -48,7 +49,7 @@ function ThermalBarcodeSVG({ value }: { value: string }) {
       { w: 2.2, gap: 1.4 },
       { w: 3.0, gap: 1.8 },
     ];
-  }, [value]);
+  }, []);
 
   return (
     <div className="flex flex-col items-center justify-center w-full px-2 py-1">
@@ -56,6 +57,8 @@ function ThermalBarcodeSVG({ value }: { value: string }) {
         viewBox="0 0 250 80"
         className="w-full h-20 max-w-[270px]"
         preserveAspectRatio="none"
+        role="img"
+        aria-label={`Barcode ${value}`}
       >
         {(() => {
           let currentX = 8;

@@ -1,32 +1,42 @@
-# React + TypeScript + Vite
+# ZoolGo — Admin Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Central administration dashboard for ZoolGo (لوحة الإدارة المركزية): overview, bookings and tickets, carriers, broker offices and wallets, financials and settlements, refunds, reports, live tracking, admin team / roles / audit, settings.
 
-Currently, two official plugins are available:
+- Stack: React 19, TypeScript, Vite, Tailwind 3, React Router 7, TanStack Query 5, Recharts, Leaflet, Radix UI.
+- RTL Arabic UI (`<html dir="rtl" lang="ar">`, IBM Plex Sans Arabic).
+- Backend API & docs: https://github.com/Abnaa-Syria/zool-backend (plan: `docs/MASTER_PLAN.md`).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+> **Status:** UI complete (29 routes) but still running on in-memory mock services (`src/features/*/services`, `src/mocks`). Wiring to the real API is MASTER_PLAN phase 4.
 
-## React Compiler
+## Run
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm ci
+npm run dev        # http://localhost:5173
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Scripts
+
+| Script | Purpose |
+|---|---|
+| `npm run dev` | Dev server |
+| `npm run build` | Typecheck + production build |
+| `npm run lint` | oxlint — warnings fail the build |
+| `npm test` | Vitest unit tests |
+| `npm run preview` | Serve the production build |
+
+## Structure
+
+```text
+src/
+├── app/          # Router, shell (sidebar, topbar, navigation)
+├── components/   # Shared UI (buttons, modals, receipt printer, …)
+├── features/     # One folder per domain: pages, components, hooks, services, types
+├── lib/          # Utilities
+├── mocks/        # Fixtures (to be removed as each domain is wired to the API)
+└── services/     # Overview service
+```
+
+## Workflow
+
+Branch → PR to `main` → CI green (`.github/workflows/ci.yml`: lint, typecheck, tests, build) → merge.

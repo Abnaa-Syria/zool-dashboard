@@ -65,7 +65,7 @@ const receiptToothPoints = Array.from(
     return `${x}% ${y}`;
   },
 ).join(", ");
-export const receiptClipPath = `polygon(0 0, 100% 0, 100% calc(100% - ${receiptToothDepth}px), ${receiptToothPoints})`;
+const receiptClipPath = `polygon(0 0, 100% 0, 100% calc(100% - ${receiptToothDepth}px), ${receiptToothPoints})`;
 
 const printingTransformKeyframes = [
   "translateY(calc(-100% + 2px))",
@@ -140,7 +140,7 @@ function useReceiptPrinter(component: string) {
   return context;
 }
 
-function ReceiptPrinterRoot({
+export function ReceiptPrinterRoot({
   "aria-label": ariaLabel = "Receipt printer",
   animate = true,
   children,
@@ -176,7 +176,7 @@ function ReceiptPrinterRoot({
   );
 }
 
-function ReceiptPrinterMachine({
+export function ReceiptPrinterMachine({
   children,
   className,
   ...props
@@ -193,7 +193,7 @@ function ReceiptPrinterMachine({
   );
 }
 
-function ReceiptPrinterHeader({
+export function ReceiptPrinterHeader({
   children,
   className,
   ...props
@@ -211,7 +211,7 @@ function ReceiptPrinterHeader({
   );
 }
 
-function ReceiptPrinterScreen({
+export function ReceiptPrinterScreen({
   children,
   className,
   ...props
@@ -291,7 +291,7 @@ function StatusIndicator({
   );
 }
 
-function ReceiptPrinterStatus({
+export function ReceiptPrinterStatus({
   children,
   className,
   ...props
@@ -334,7 +334,7 @@ function ReceiptPrinterStatus({
   );
 }
 
-function ReceiptPrinterPaper({
+export function ReceiptPrinterPaper({
   children,
   className,
   style,
@@ -354,7 +354,7 @@ function ReceiptPrinterPaper({
   );
 }
 
-function ReceiptPrinterOutput({
+export function ReceiptPrinterOutput({
   children,
   className,
   ...props
@@ -415,13 +415,3 @@ function ReceiptPrinterOutput({
     </div>
   );
 }
-
-export const ReceiptPrinter = {
-  Header: ReceiptPrinterHeader,
-  Machine: ReceiptPrinterMachine,
-  Output: ReceiptPrinterOutput,
-  Paper: ReceiptPrinterPaper,
-  Root: ReceiptPrinterRoot,
-  Screen: ReceiptPrinterScreen,
-  Status: ReceiptPrinterStatus,
-};
