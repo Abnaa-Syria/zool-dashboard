@@ -20,7 +20,7 @@ export const navigationConfig: NavSection[] = [
     title: 'الرئيسية والعمليات',
     items: [
       { name: 'نظرة عامة', path: '/overview', icon: 'grid_view', permission: 'bookings.view', data: 'live' },
-      { name: 'التتبع المباشر', path: '/tracking', icon: 'share_location', data: 'mock' },
+      { name: 'التتبع المباشر', path: '/tracking', icon: 'share_location', permission: 'catalog.view', data: 'live' },
       { name: 'الحجوزات والتذاكر', path: '/bookings', icon: 'confirmation_number', permission: 'bookings.view', data: 'live' },
       { name: 'شركات النقل', path: '/companies', icon: 'departure_board', permission: 'carriers.view', data: 'live' },
       { name: 'مكاتب الوكلاء', path: '/brokers', icon: 'storefront', permission: 'brokers.view', data: 'live' },
@@ -53,7 +53,7 @@ export const navigationConfig: NavSection[] = [
       { name: 'محافظ المكاتب', path: '/financials/wallets', icon: 'account_balance_wallet', permission: 'wallets.view', data: 'live' },
       { name: 'مراجعة طلبات الشحن', path: '/financials/topup-queue', icon: 'receipt_long', permission: 'wallets.topups.review', data: 'live' },
       { name: 'العمولات ودورات التسوية', path: '/financials/settlements', icon: 'currency_exchange', permission: 'commissions.view', data: 'live' },
-      { name: 'الإلغاءات والاسترداد', path: '/refunds/queue', icon: 'assignment_return', permission: 'bookings.view', data: 'mock' },
+      { name: 'الإلغاءات والاسترداد', path: '/refunds/queue', icon: 'assignment_return', permission: 'bookings.view', data: 'live' },
       { name: 'التقارير المالية والإحصاءات', path: '/reports', icon: 'bar_chart_4_bars', permission: 'reports.view', data: 'live' },
     ],
   },

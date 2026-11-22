@@ -4,7 +4,7 @@ import { LoginPage } from '../../features/auth/LoginPage';
 import { RequireAuth } from '../../features/auth/RequireAuth';
 import { OverviewPage } from '../../features/overview/pages/OverviewPage';
 import { LiveTrackingPage } from '../../features/tracking/pages/LiveTrackingPage';
-import { VehicleDetailsPage } from '../../features/tracking/pages/VehicleDetailsPage';
+import { TripTrackingPage } from '../../features/tracking/pages/TripTrackingPage';
 import { BookingsListPage } from '../../features/bookings/pages/BookingsListPage';
 import { BookingDetailsPage } from '../../features/bookings/pages/BookingDetailsPage';
 import { BookingActivityPage } from '../../features/bookings/pages/BookingActivityPage';
@@ -22,7 +22,6 @@ import { TopUpQueuePage } from '../../features/financials/pages/TopUpQueuePage';
 import { FinancialReportsPage } from '../../features/reports/pages/FinancialReportsPage';
 import { RefundsQueuePage } from '../../features/refunds/pages/RefundsQueuePage';
 import { CancellationPoliciesPage } from '../../features/refunds/pages/CancellationPoliciesPage';
-import { DisputeDossierPage } from '../../features/refunds/pages/DisputeDossierPage';
 import { AdminTeamPage } from '../../features/admin/pages/AdminTeamPage';
 import { AdminMemberDetailsPage } from '../../features/admin/pages/AdminMemberDetailsPage';
 import { RolesPermissionsPage } from '../../features/admin/pages/RolesPermissionsPage';
@@ -59,14 +58,19 @@ export const router = createBrowserRouter([
         path: 'overview',
         element: <OverviewPage />,
       },
-      // Operations Modules - Live Fleet GIS Tracking Module
+      // Live tracking (driver GPS, polled)
       {
         path: 'tracking',
         element: <LiveTrackingPage />,
       },
       {
+        path: 'tracking/trips/:tripId',
+        element: <TripTrackingPage />,
+      },
+      // Legacy fixture route: tracking is per trip now (a vehicle id cannot be mapped to its live trip).
+      {
         path: 'tracking/vehicles/:vehicleId',
-        element: <VehicleDetailsPage />,
+        element: <Navigate to="/tracking" replace />,
       },
       // Operations Modules - Bookings & Tickets Milestone
       {
@@ -153,10 +157,6 @@ export const router = createBrowserRouter([
       {
         path: 'refunds/policies',
         element: <CancellationPoliciesPage />,
-      },
-      {
-        path: 'refunds/disputes/:ticketId',
-        element: <DisputeDossierPage />,
       },
       {
         path: 'reports',

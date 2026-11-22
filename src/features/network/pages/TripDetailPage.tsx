@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
@@ -50,6 +50,11 @@ export const TripDetailPage: React.FC = () => {
         className="mb-0"
         actions={
           <div className="flex gap-2">
+            {(t.status === 'BOARDING' || t.status === 'IN_PROGRESS') && (
+              <Link to={`/tracking/trips/${t.id}`}>
+                <Button variant="outline" icon="share_location">التتبع المباشر</Button>
+              </Link>
+            )}
             {canAssign && <Button variant="outline" icon="swap_horiz" onClick={() => setModal('assign')}>تغيير التعيين</Button>}
             {canCancel && <Button variant="danger" icon="cancel" onClick={() => setModal('cancel')}>إلغاء مع استرداد كامل</Button>}
           </div>

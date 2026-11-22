@@ -19,6 +19,7 @@ const routeLabelMap: Record<string, string> = {
   settlements: 'العمولات ودورات التسوية',
   refunds: 'الإلغاءات والاسترداد',
   queue: 'طابور الطلبات',
+  policies: 'سياسة الإلغاء والاسترداد',
   reports: 'التقارير المالية والإحصاءات',
   admin: 'إدارة النظام',
   team: 'فريق الإدارة',
