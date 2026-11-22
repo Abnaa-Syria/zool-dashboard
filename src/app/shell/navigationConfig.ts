@@ -53,6 +53,7 @@ export const navigationConfig: NavSection[] = [
       { name: 'محافظ المكاتب', path: '/financials/wallets', icon: 'account_balance_wallet', permission: 'wallets.view', data: 'live' },
       { name: 'مراجعة طلبات الشحن', path: '/financials/topup-queue', icon: 'receipt_long', permission: 'wallets.topups.review', data: 'live' },
       { name: 'العمولات ودورات التسوية', path: '/financials/settlements', icon: 'currency_exchange', permission: 'commissions.view', data: 'live' },
+      { name: 'تسويات شركات النقل', path: '/financials/carrier-settlements', icon: 'request_quote', permission: 'carriers.view', data: 'live' },
       { name: 'الإلغاءات والاسترداد', path: '/refunds/queue', icon: 'assignment_return', permission: 'bookings.view', data: 'live' },
       { name: 'التقارير المالية والإحصاءات', path: '/reports', icon: 'bar_chart_4_bars', permission: 'reports.view', data: 'live' },
     ],

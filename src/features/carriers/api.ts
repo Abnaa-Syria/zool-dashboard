@@ -2,6 +2,15 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { api } from '../../lib/api/client';
 
 export type CarrierStatus = 'ACTIVE' | 'SUSPENDED';
+export type PlatformFeeType = 'NONE' | 'PERCENT' | 'FIXED';
+export type CommissionBearer = 'CARRIER' | 'PLATFORM';
+
+/** D-REV-02 per-carrier settlement configuration. PERCENT value = basis points; FIXED = minor units per ticket. */
+export type CarrierBilling = {
+  platformFeeType: PlatformFeeType;
+  platformFeeValue: number;
+  brokerCommissionBearer: CommissionBearer;
+};
 
 /** GET /carriers row (backend carriers.service `toDto`). */
 export type CarrierListItem = {
@@ -25,6 +34,7 @@ export type CarrierDetail = {
   logoUrl: string | null;
   rating: { average: number; count: number };
   cashEnabled: boolean;
+  billing: CarrierBilling;
   suspendedAt: string | null;
   assignmentCount: number;
   createdAt: string;
@@ -60,13 +70,36 @@ export type CarrierPatch = Partial<{
   legalName: string | null;
   logoUrl: string | null;
   cashEnabled: boolean;
-}>;
+}> &
+  Partial<CarrierBilling>;
+
+export type CarrierStaffRole = 'MANAGER' | 'STAFF';
+export type CarrierStaffStatus = 'ACTIVE' | 'SUSPENDED';
+export type CarrierStaffFlags = { canManageFleet: boolean; canManageSchedule: boolean; canViewFinance: boolean; canManageStaff: boolean };
+
+/** D-CARRIER-PORTAL-01 portal account (backend carrier-portal `toEmployeeDto`). */
+export type CarrierEmployee = {
+  id: string;
+  displayName: string;
+  phone: string | null;
+  role: CarrierStaffRole;
+  status: CarrierStaffStatus;
+  flags: CarrierStaffFlags;
+  permissions: string[];
+  lastLoginAt: string | null;
+  createdAt: string;
+};
+
+export type CreateCarrierInput = { key: string; name: string; manager?: { displayName: string; phone: string } };
+export type CreateCarrierStaffInput = { displayName: string; phone: string; role?: CarrierStaffRole; flags?: Partial<CarrierStaffFlags> };
+export type UpdateCarrierStaffInput = Partial<{ displayName: string; role: CarrierStaffRole; status: CarrierStaffStatus; flags: Partial<CarrierStaffFlags> }>;
 
 export const carrierKeys = {
   all: ['carriers'] as const,
   list: (f: CarrierFilters) => [...carrierKeys.all, 'list', f] as const,
   detail: (id: string) => [...carrierKeys.all, 'detail', id] as const,
   affected: (id: string, page: number) => [...carrierKeys.all, 'affected-trips', id, page] as const,
+  staff: (id: string) => [...carrierKeys.all, 'staff', id] as const,
 };
 
 export function useCarriers(filters: CarrierFilters) {
@@ -97,7 +130,8 @@ export function useAffectedTrips(id: string | undefined, page: number) {
 export function useCreateCarrier() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { key: string; name: string }) => api.post<CarrierListItem>('/carriers', input).then((r) => r.data),
+    mutationFn: (input: CreateCarrierInput) =>
+      api.post<CarrierListItem & { manager: CarrierEmployee | null }>('/carriers', input).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: carrierKeys.all }),
   });
 }
@@ -124,6 +158,31 @@ export function useCancelTrip(companyId: string) {
         qc.invalidateQueries({ queryKey: [...carrierKeys.all, 'affected-trips', companyId] }),
         qc.invalidateQueries({ queryKey: ['admin-bookings'] }),
       ]),
+  });
+}
+
+export function useCarrierStaff(id: string | undefined) {
+  return useQuery({
+    queryKey: carrierKeys.staff(id ?? ''),
+    queryFn: ({ signal }) => api.get<CarrierEmployee[]>(`/carriers/${id}/staff`, undefined, signal).then((r) => r.data),
+    enabled: Boolean(id),
+  });
+}
+
+export function useCreateCarrierStaff(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateCarrierStaffInput) => api.post<CarrierEmployee>(`/carriers/${id}/staff`, input).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: carrierKeys.staff(id) }),
+  });
+}
+
+export function useUpdateCarrierStaff(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ employeeId, changes }: { employeeId: string; changes: UpdateCarrierStaffInput }) =>
+      api.patch<CarrierEmployee>(`/carriers/${id}/staff/${employeeId}`, changes).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: carrierKeys.staff(id) }),
   });
 }
 

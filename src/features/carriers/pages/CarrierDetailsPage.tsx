@@ -11,6 +11,8 @@ import { formatDateTime } from '../../../lib/dates';
 import { useAuth } from '../../auth/auth-context';
 import { CARRIER_STATUS_LABEL, useCarrier } from '../api';
 import { AffectedTripsSection } from '../components/AffectedTripsSection';
+import { BillingSection } from '../components/BillingSection';
+import { CarrierStaffSection } from '../components/CarrierStaffSection';
 import { CarrierStatusModal } from '../components/CarrierStatusModal';
 import { EditCarrierModal } from '../components/EditCarrierModal';
 
@@ -96,6 +98,10 @@ export const CarrierDetailsPage: React.FC = () => {
               </dl>
             </div>
           </section>
+
+          <BillingSection carrier={c} />
+
+          <CarrierStaffSection companyId={c.id} />
 
           <AffectedTripsSection companyId={c.id} suspended={c.status === 'SUSPENDED'} />
 

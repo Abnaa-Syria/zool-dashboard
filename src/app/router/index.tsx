@@ -27,6 +27,7 @@ import { AdminMemberDetailsPage } from '../../features/admin/pages/AdminMemberDe
 import { RolesPermissionsPage } from '../../features/admin/pages/RolesPermissionsPage';
 import { AuditTrailPage } from '../../features/admin/pages/AuditTrailPage';
 import { SettlementsPage } from '../../features/settlements/pages/SettlementsPage';
+import { CarrierSettlementsPage } from '../../features/carrier-settlements/pages/CarrierSettlementsPage';
 import { GeneralSettingsPage } from '../../features/admin/pages/GeneralSettingsPage';
 import { RoutesListPage } from '../../features/network/pages/RoutesListPage';
 import { TripsListPage } from '../../features/network/pages/TripsListPage';
@@ -149,6 +150,10 @@ export const router = createBrowserRouter([
       {
         path: 'financials/settlements',
         element: <SettlementsPage />,
+      },
+      {
+        path: 'financials/carrier-settlements',
+        element: <CarrierSettlementsPage />,
       },
       {
         path: 'refunds/queue',
