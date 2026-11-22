@@ -29,6 +29,7 @@ function parse(s: SystemSetting, raw: string | boolean): { value?: SettingValue;
   if (s.type === 'string') {
     const v = String(raw);
     if (s.options && !s.options.includes(v)) return { error: 'قيمة غير مسموح بها' };
+    if (s.maxLength !== undefined && v.length > s.maxLength) return { error: `بحد أقصى ${s.maxLength} حرفًا` };
     return { value: v };
   }
   const text = String(raw).trim();
@@ -230,12 +231,13 @@ const SettingField: React.FC<SettingFieldProps> = ({ setting: s, value, error, c
           step={money ? 0.01 : 1}
           min={s.min !== undefined ? (money ? minorToSdg(s.min) : s.min) : undefined}
           max={s.max !== undefined ? (money ? minorToSdg(s.max) : s.max) : undefined}
+          maxLength={s.maxLength}
           value={String(value)}
           disabled={readOnly}
           onChange={(e) => onChange(e.target.value)}
           aria-invalid={Boolean(error)}
           dir="ltr"
-          className={`h-9 w-32 rounded-lg bg-surface-container-lowest text-sm text-left tabular-nums border px-2 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-secondary/30 ${error ? 'border-error' : 'border-outline-variant/60'}`}
+          className={`h-9 ${s.type === 'string' ? 'w-56' : 'w-32'} rounded-lg bg-surface-container-lowest text-sm text-left tabular-nums border px-2 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-secondary/30 ${error ? 'border-error' : 'border-outline-variant/60'}`}
         />
         {u && <span className="text-xs text-on-surface-variant">{u}</span>}
       </div>

@@ -102,6 +102,7 @@ export type SystemSetting = {
   min?: number;
   max?: number;
   options?: string[];
+  maxLength?: number;
   updatedAt: string | null;
   updatedBy: { id: string; displayName: string } | null;
 };

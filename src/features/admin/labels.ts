@@ -156,6 +156,12 @@ export const SETTING_LABEL: Record<string, string> = {
   'change.maxChangesPerBooking': 'أقصى عدد تعديلات للحجز',
   'change.feeMinor': 'رسوم تعديل الرحلة',
   'platform.maintenanceMode': 'وضع الصيانة (إيقاف حجوزات العملاء والوكلاء)',
+  'support.phone': 'رقم هاتف الدعم',
+  'support.whatsapp': 'رقم واتساب الدعم',
+  'support.email': 'بريد الدعم',
+  'app.customer.minVersion': 'أقدم إصدار مسموح لتطبيق العميل',
+  'app.driver.minVersion': 'أقدم إصدار مسموح لتطبيق السائق',
+  'app.broker.minVersion': 'أقدم إصدار مسموح لتطبيق الوكيل',
 };
 
 export const SETTING_GROUPS: Array<{ prefix: string; label: string; icon: string }> = [
@@ -165,6 +171,8 @@ export const SETTING_GROUPS: Array<{ prefix: string; label: string; icon: string
   { prefix: 'payment', label: 'الدفع الإلكتروني', icon: 'credit_card' },
   { prefix: 'cash', label: 'الدفع النقدي للسائق', icon: 'payments' },
   { prefix: 'change', label: 'تعديل الحجوزات', icon: 'swap_horiz' },
+  { prefix: 'support', label: 'الدعم الفني', icon: 'support_agent' },
+  { prefix: 'app', label: 'إصدارات التطبيقات', icon: 'system_update' },
   { prefix: 'platform', label: 'المنصة', icon: 'tune' },
 ];
 
