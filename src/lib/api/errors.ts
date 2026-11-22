@@ -43,6 +43,10 @@ export function errorMessage(error: unknown, fallback = 'حدث خطأ غير م
       const first = error.details[0] as { path?: string; message?: string };
       return `${MESSAGES.VALIDATION_ERROR} (${first.path ?? ''}: ${first.message ?? ''})`;
     }
+    // Business-rule validation from services: details = { field, ... } with an English message.
+    if (error.code === 'VALIDATION_ERROR' && error.details && typeof error.details === 'object' && 'field' in error.details) {
+      return `${MESSAGES.VALIDATION_ERROR} (${String((error.details as { field: unknown }).field)}: ${error.message})`;
+    }
     return MESSAGES[error.code] ?? error.message ?? fallback;
   }
   return fallback;

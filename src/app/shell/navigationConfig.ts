@@ -24,7 +24,27 @@ export const navigationConfig: NavSection[] = [
       { name: 'الحجوزات والتذاكر', path: '/bookings', icon: 'confirmation_number', permission: 'bookings.view', data: 'live' },
       { name: 'شركات النقل', path: '/companies', icon: 'departure_board', permission: 'carriers.view', data: 'live' },
       { name: 'مكاتب الوكلاء', path: '/brokers', icon: 'storefront', permission: 'brokers.view', data: 'live' },
-      { name: 'حسابات المسافرين', path: '/travelers', icon: 'group', permission: 'customers.view', data: 'mock' },
+      { name: 'حسابات المسافرين', path: '/travelers', icon: 'group', permission: 'customers.view', data: 'live' },
+    ],
+  },
+  {
+    title: 'الشبكة والأسطول',
+    items: [
+      { name: 'المسارات', path: '/network/routes', icon: 'route', permission: 'catalog.view', data: 'live' },
+      { name: 'الرحلات والجدولة', path: '/network/trips', icon: 'event_repeat', permission: 'catalog.view', data: 'live' },
+      // geo + fleet
+      { name: 'المدن', path: '/network/cities', icon: 'location_city', permission: 'geo.view', data: 'live' },
+      { name: 'المحطات', path: '/network/stations', icon: 'pin_drop', permission: 'geo.view', data: 'live' },
+      { name: 'مزايا الحافلات', path: '/network/amenities', icon: 'featured_seasonal_and_gifts', permission: 'geo.view', data: 'live' },
+      { name: 'الحافلات', path: '/fleet/vehicles', icon: 'directions_bus', permission: 'fleet.view', data: 'live' },
+      { name: 'السائقون', path: '/fleet/drivers', icon: 'badge', permission: 'fleet.view', data: 'live' },
+    ],
+  },
+  {
+    title: 'التسويق والمحتوى',
+    items: [
+      { name: 'الكوبونات', path: '/marketing/coupons', icon: 'sell', permission: 'coupons.view', data: 'live' },
+      { name: 'صفحات المحتوى', path: '/content', icon: 'article', permission: 'content.manage', data: 'live' },
     ],
   },
   {

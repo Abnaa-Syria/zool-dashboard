@@ -12,8 +12,11 @@ import { CarriersListPage } from '../../features/carriers/pages/CarriersListPage
 import { CarrierDetailsPage } from '../../features/carriers/pages/CarrierDetailsPage';
 import { BrokersListPage } from '../../features/brokers/pages/BrokersListPage';
 import { BrokerDetailsPage } from '../../features/brokers/pages/BrokerDetailsPage';
-import { TravelersListPage } from '../../features/travelers/pages/TravelersListPage';
-import { TravelerDetailsPage } from '../../features/travelers/pages/TravelerDetailsPage';
+import { CustomersListPage } from '../../features/customers/pages/CustomersListPage';
+import { CustomerDetailsPage } from '../../features/customers/pages/CustomerDetailsPage';
+import { CouponsListPage } from '../../features/coupons/pages/CouponsListPage';
+import { ContentPagesListPage } from '../../features/content/pages/ContentPagesListPage';
+import { ContentEditorPage } from '../../features/content/pages/ContentEditorPage';
 import { WalletsOverviewPage } from '../../features/financials/pages/WalletsOverviewPage';
 import { TopUpQueuePage } from '../../features/financials/pages/TopUpQueuePage';
 import { FinancialReportsPage } from '../../features/reports/pages/FinancialReportsPage';
@@ -26,6 +29,17 @@ import { RolesPermissionsPage } from '../../features/admin/pages/RolesPermission
 import { AuditTrailPage } from '../../features/admin/pages/AuditTrailPage';
 import { SettlementsPage } from '../../features/settlements/pages/SettlementsPage';
 import { GeneralSettingsPage } from '../../features/admin/pages/GeneralSettingsPage';
+import { RoutesListPage } from '../../features/network/pages/RoutesListPage';
+import { TripsListPage } from '../../features/network/pages/TripsListPage';
+import { TripDetailPage } from '../../features/network/pages/TripDetailPage';
+// geo + fleet
+import { CitiesPage } from '../../features/geo/pages/CitiesPage';
+import { StationsPage } from '../../features/geo/pages/StationsPage';
+import { AmenitiesPage } from '../../features/geo/pages/AmenitiesPage';
+import { VehiclesListPage } from '../../features/fleet/pages/VehiclesListPage';
+import { VehicleFormPage } from '../../features/fleet/pages/VehicleFormPage';
+import { FleetVehicleDetailsPage } from '../../features/fleet/pages/FleetVehicleDetailsPage';
+import { DriversListPage } from '../../features/fleet/pages/DriversListPage';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -85,14 +99,40 @@ export const router = createBrowserRouter([
         path: 'brokers/:id',
         element: <BrokerDetailsPage />,
       },
+      // customers + coupons + content
       {
         path: 'travelers',
-        element: <TravelersListPage />,
+        element: <CustomersListPage />,
       },
       {
         path: 'travelers/:id',
-        element: <TravelerDetailsPage />,
+        element: <CustomerDetailsPage />,
       },
+      {
+        path: 'marketing/coupons',
+        element: <CouponsListPage />,
+      },
+      {
+        path: 'content',
+        element: <ContentPagesListPage />,
+      },
+      {
+        path: 'content/:slug',
+        element: <ContentEditorPage />,
+      },
+      // network routes + trips
+      { path: 'network/routes', element: <RoutesListPage /> },
+      { path: 'network/trips', element: <TripsListPage /> },
+      { path: 'network/trips/:id', element: <TripDetailPage /> },
+      // geo + fleet
+      { path: 'network/cities', element: <CitiesPage /> },
+      { path: 'network/stations', element: <StationsPage /> },
+      { path: 'network/amenities', element: <AmenitiesPage /> },
+      { path: 'fleet/vehicles', element: <VehiclesListPage /> },
+      { path: 'fleet/vehicles/new', element: <VehicleFormPage /> },
+      { path: 'fleet/vehicles/:id', element: <FleetVehicleDetailsPage /> },
+      { path: 'fleet/vehicles/:id/edit', element: <VehicleFormPage /> },
+      { path: 'fleet/drivers', element: <DriversListPage /> },
       // Financial Modules - wallets, top-up review, commission settlements (live API)
       {
         path: 'financials/wallets',
