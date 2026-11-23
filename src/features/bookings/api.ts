@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, downloadFile } from '../../lib/api/client';
+import type { AdminRefund } from '../refunds/api';
 
 /** Admin booking as returned by GET /admin/bookings (backend `toBookingDto`). */
 export type AdminBooking = {
@@ -29,7 +30,15 @@ export type AdminBooking = {
   cancelledAt: string | null;
   cancelReason: string | null;
   createdAt: string;
-  passengers: Array<{ id: string; fullName: string; phone: string | null; idNumber: string | null }>;
+  passengers: Array<{ id: string; fullName: string; phone: string | null; idNumber: string | null; gender?: 'MALE' | 'FEMALE' | null }>;
+  /** D-CHG-01: on a CHANGED booking, the booking that replaced it. */
+  replacedByBookingId?: string | null;
+  /** D-CHG-01: on a booking created by a trip change, the booking it replaced. */
+  replacesBookingId?: string | null;
+  changeCount?: number;
+  /** Round trip: both legs share the group id. */
+  groupId?: string | null;
+  leg?: 'OUTBOUND' | 'RETURN' | null;
   tickets: Array<{
     id: string;
     ticketNumber: string;
@@ -38,7 +47,11 @@ export type AdminBooking = {
     seatLabel: string | null;
     passengerId: string;
     passengerName: string | null;
+    boardingStatus?: 'PENDING' | 'BOARDED' | 'NO_SHOW';
+    qrPayload?: string | null;
   }>;
+  /** Refunds to the original payment (app bookings); empty for wallet-refunded broker bookings. */
+  refunds?: Array<{ id: string; amountMinor: number; status: AdminRefund['status']; reason: AdminRefund['reason']; createdAt: string; processedAt: string | null }>;
 };
 
 export type AdminBookingFilters = {
@@ -49,6 +62,8 @@ export type AdminBookingFilters = {
   status?: 'CONFIRMED' | 'CANCELLED';
   officeId?: string;
   companyId?: string;
+  customerId?: string;
+  employeeId?: string;
   from?: string;
   to?: string;
 };
@@ -59,11 +74,12 @@ export const bookingKeys = {
   detail: (id: string) => [...bookingKeys.all, 'detail', id] as const,
 };
 
-export function useAdminBookings(filters: AdminBookingFilters) {
+export function useAdminBookings(filters: AdminBookingFilters, enabled = true) {
   return useQuery({
     queryKey: bookingKeys.list(filters),
     queryFn: ({ signal }) => api.get<AdminBooking[]>('/admin/bookings', filters, signal),
     placeholderData: keepPreviousData,
+    enabled,
   });
 }
 
@@ -92,7 +108,8 @@ export type AdminCancelResult = {
   booking: AdminBooking;
   refundedAmountMinor: number;
   commissionClawedBackMinor: number;
-  balanceAfterMinor: number;
+  /** null for app (direct) bookings: no wallet involved */
+  balanceAfterMinor: number | null;
   replayed: boolean;
 };
 
@@ -178,6 +195,25 @@ export const TICKET_STATUS_LABEL: Record<string, string> = {
   CANCELLED: 'ملغاة',
   CHANGED: 'منقولة لرحلة أخرى',
 };
+
+export const BOARDING_STATUS_LABEL: Record<string, string> = {
+  PENDING: 'لم يصعد بعد',
+  BOARDED: 'صعد',
+  NO_SHOW: 'لم يحضر',
+};
+
+export const GENDER_LABEL: Record<string, string> = { MALE: 'ذكر', FEMALE: 'أنثى' };
+
+export const LEG_LABEL: Record<string, string> = { OUTBOUND: 'رحلة الذهاب', RETURN: 'رحلة العودة' };
+
+/**
+ * The other leg of a round trip among `candidates` (same groupId, different id), or null.
+ * The admin list API has no groupId filter, so callers pass a page of the same customer's/office's bookings.
+ */
+export function findOtherLeg<T extends Pick<AdminBooking, 'id' | 'groupId'>>(booking: Pick<AdminBooking, 'id' | 'groupId'>, candidates: T[]): T | null {
+  if (!booking.groupId) return null;
+  return candidates.find((c) => c.id !== booking.id && c.groupId === booking.groupId) ?? null;
+}
 
 export function bookingStatusVariant(status: AdminBooking['status']): 'success' | 'error' | 'warning' | 'neutral' {
   if (status === 'CONFIRMED') return 'success';

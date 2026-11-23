@@ -43,6 +43,7 @@ export type CouponPatch = { isActive?: boolean; validTo?: string; maxRedemptions
 export const couponKeys = {
   all: ['admin-coupons'] as const,
   list: (f: CouponFilters) => [...couponKeys.all, 'list', f] as const,
+  detail: (id: string) => [...couponKeys.all, 'detail', id] as const,
 };
 
 export function useCoupons(filters: CouponFilters) {
@@ -50,6 +51,26 @@ export function useCoupons(filters: CouponFilters) {
     queryKey: couponKeys.list(filters),
     queryFn: ({ signal }) => api.get<Coupon[]>('/admin/coupons', filters, signal),
     placeholderData: keepPreviousData,
+  });
+}
+
+export function useCoupon(id: string | undefined) {
+  return useQuery({
+    queryKey: couponKeys.detail(id ?? ''),
+    queryFn: ({ signal }) => api.get<Coupon>(`/admin/coupons/${id}`, undefined, signal).then((r) => r.data),
+    enabled: Boolean(id),
+  });
+}
+
+/** DELETE /admin/coupons/:id — only when never redeemed (409 ENTITY_IN_USE otherwise; deactivate instead). */
+export function useDeleteCoupon() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<{ deleted: boolean }>(`/admin/coupons/${id}`).then((r) => r.data),
+    onSuccess: (_d, id) => {
+      qc.removeQueries({ queryKey: couponKeys.detail(id) });
+      return qc.invalidateQueries({ queryKey: [...couponKeys.all, 'list'] });
+    },
   });
 }
 

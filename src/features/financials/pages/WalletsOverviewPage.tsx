@@ -130,8 +130,11 @@ export const WalletsOverviewPage: React.FC = () => {
                       <Badge variant={w.officeStatus === 'ACTIVE' ? 'success' : 'error'} dot>{OFFICE_STATUS_LABEL[w.officeStatus]}</Badge>
                     </td>
                     <td className="py-2 px-2 text-on-surface-variant">{formatDateTime(w.updatedAt)}</td>
-                    <td className="py-2 px-2 text-left">
+                    <td className="py-2 px-2 text-left whitespace-nowrap">
                       <Button size="sm" variant="ghost" icon="receipt" onClick={() => setSelected(w)}>كشف الحركات</Button>
+                      <Link to={`/brokers/${w.officeId}`}>
+                        <Button size="sm" variant="outline" icon="visibility">صفحة المكتب</Button>
+                      </Link>
                     </td>
                   </tr>
                 ))}

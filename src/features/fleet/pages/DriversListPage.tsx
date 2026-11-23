@@ -1,5 +1,7 @@
 import * as React from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
+import { DeleteEntityDialog } from '../../../components/shared/DeleteEntityDialog';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { EmptyState, ErrorState } from '../../../components/ui/EmptyState';
@@ -13,7 +15,7 @@ import { useCarriers } from '../../carriers/api';
 import { useDebouncedValue } from '../../carriers/useDebouncedValue';
 import { ConfirmDialog, Pager, Panel, Select, TableShell, Td, Th } from '../../geo/components/common';
 import { usePageReset } from '../../geo/usePageReset';
-import { DRIVER_STATUS_LABEL, useDrivers, useUpdateDriver, type Driver, type DriverStatus } from '../api';
+import { DRIVER_STATUS_LABEL, useDeleteDriver, useDrivers, useUpdateDriver, type Driver, type DriverStatus } from '../api';
 import { DriverModal } from '../components/DriverModal';
 
 const PAGE_SIZE = 20;
@@ -29,6 +31,9 @@ export const DriversListPage: React.FC = () => {
   const [modal, setModal] = React.useState<{ driver?: Driver } | null>(null);
   const [toggling, setToggling] = React.useState<Driver | null>(null);
   const update = useUpdateDriver();
+  const remove = useDeleteDriver();
+  const [deleting, setDeleting] = React.useState<Driver | null>(null);
+  const navigate = useNavigate();
 
   const carriers = useCarriers({ pageSize: 100 });
   const drivers = useDrivers({ page, pageSize: PAGE_SIZE, q: q || undefined, companyId: companyId || undefined, status: status || undefined });
@@ -85,15 +90,21 @@ export const DriversListPage: React.FC = () => {
                 <Th>الرخصة</Th>
                 <Th>آخر دخول</Th>
                 <Th>الحالة</Th>
-                {canManage && <Th className="text-left">إجراءات</Th>}
+                <Th className="text-left">إجراءات</Th>
               </>
             }
           >
             {rows.map((d) => {
               const expired = d.licenseExpiry !== null && d.licenseExpiry < today;
               return (
-                <tr key={d.id} className="border-t border-surface-container hover:bg-surface-container/50">
-                  <Td className="font-semibold">{d.displayName}</Td>
+                <tr
+                  key={d.id}
+                  className="border-t border-surface-container hover:bg-surface-container/50 cursor-pointer"
+                  onClick={() => navigate(`/fleet/drivers/${d.id}`)}
+                >
+                  <Td className="font-semibold">
+                    <Link to={`/fleet/drivers/${d.id}`} onClick={(e) => e.stopPropagation()} className="text-secondary">{d.displayName}</Link>
+                  </Td>
                   <Td className="font-mono text-xs" dir="ltr">{d.driverCode}</Td>
                   <Td className="font-mono text-xs" dir="ltr">{d.phone ?? '—'}</Td>
                   <Td>{d.company.name}</Td>
@@ -110,14 +121,18 @@ export const DriversListPage: React.FC = () => {
                   <Td>
                     <Badge variant={d.status === 'ACTIVE' ? 'success' : 'error'} dot>{DRIVER_STATUS_LABEL[d.status]}</Badge>
                   </Td>
-                  {canManage && (
-                    <Td className="text-left whitespace-nowrap">
-                      <Button size="sm" variant="ghost" icon="edit" onClick={() => setModal({ driver: d })}>تعديل</Button>
-                      <Button size="sm" variant="ghost" icon={d.status === 'ACTIVE' ? 'block' : 'check_circle'} onClick={() => setToggling(d)}>
-                        {d.status === 'ACTIVE' ? 'إيقاف' : 'إعادة التفعيل'}
-                      </Button>
-                    </Td>
-                  )}
+                  <Td className="text-left whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                    <Button size="sm" variant="ghost" icon="visibility" onClick={() => navigate(`/fleet/drivers/${d.id}`)}>عرض</Button>
+                    {canManage && (
+                      <>
+                        <Button size="sm" variant="ghost" icon="edit" onClick={() => setModal({ driver: d })}>تعديل</Button>
+                        <Button size="sm" variant="ghost" icon={d.status === 'ACTIVE' ? 'block' : 'check_circle'} onClick={() => setToggling(d)}>
+                          {d.status === 'ACTIVE' ? 'إيقاف' : 'إعادة التفعيل'}
+                        </Button>
+                        <Button size="sm" variant="ghost" icon="delete" className="text-error" onClick={() => setDeleting(d)}>حذف</Button>
+                      </>
+                    )}
+                  </Td>
                 </tr>
               );
             })}
@@ -126,6 +141,23 @@ export const DriversListPage: React.FC = () => {
         <Pager meta={drivers.data?.meta} busy={drivers.isFetching} onPage={setPage} />
       </Panel>
 
+      <DeleteEntityDialog
+        open={deleting !== null}
+        onOpenChange={(o) => !o && setDeleting(null)}
+        entityLabel="السائق"
+        name={deleting?.displayName ?? ''}
+        description={<p>يُحذف حساب الدخول أيضًا. السائق الذي له رحلات أو سجل صعود أو تحصيل نقدي لا يُحذف؛ أوقفه بدلًا من ذلك.</p>}
+        onDelete={() => remove.mutateAsync(deleting!.id)}
+        alternative={
+          deleting?.status === 'ACTIVE'
+            ? {
+                label: 'إيقاف السائق',
+                description: 'إيقاف السائق ينهي جلساته ويمنعه من الدخول والتعيين مع الإبقاء على سجل رحلاته.',
+                run: () => update.mutateAsync({ id: deleting.id, patch: { status: 'SUSPENDED' } }),
+              }
+            : undefined
+        }
+      />
       <DriverModal driver={modal?.driver} open={modal !== null} onOpenChange={(o) => !o && setModal(null)} />
       <ConfirmDialog
         open={toggling !== null}

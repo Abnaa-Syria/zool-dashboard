@@ -20,7 +20,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCloseMobile,
 }) => {
   const location = useLocation();
-  const { can } = useAuth();
+  const { can, admin, logout } = useAuth();
+  const initials = (admin?.displayName ?? '?')
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w.charAt(0))
+    .join('');
   const sections = navigationConfig
     .map((section) => ({ ...section, items: section.items.filter((item) => !item.permission || can(item.permission)) }))
     .filter((section) => section.items.length > 0);
@@ -174,28 +179,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ))}
       </div>
 
-      {/* Admin User Persona Footer */}
+      {/* Signed-in admin */}
       <div className={cn('p-space-sm m-space-xs rounded-xl bg-surface-container-lowest border border-outline-variant/30 shadow-card flex items-center justify-between gap-space-sm transition-all', isCollapsed ? 'p-2 justify-center' : '')}>
         <div className="flex items-center gap-space-sm">
           <div className="relative shrink-0">
             <div className="w-9 h-9 rounded-full bg-secondary-container text-secondary flex items-center justify-center font-bold text-sm">
-              أس
+              {initials}
             </div>
             <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-secondary border-2 border-surface-container-lowest" />
           </div>
           {!isCollapsed && (
             <div className="flex flex-col text-right">
-              <span className="text-xs font-bold text-on-surface leading-tight">أحمد السر</span>
-              <span className="text-[10px] text-on-surface-variant font-medium">المشرف العام (Persona)</span>
+              <span className="text-xs font-bold text-on-surface leading-tight">{admin?.displayName}</span>
+              <span className="text-[10px] text-on-surface-variant font-medium">{admin?.roles.map((r) => r.name).join('، ') || 'مشرف'}</span>
             </div>
           )}
         </div>
 
         {!isCollapsed && (
-          <SimpleTooltip content="تسجيل الخروج (محاكاة هوية التطوير)">
+          <SimpleTooltip content="تسجيل الخروج">
             <button
               type="button"
-              onClick={() => alert('تنبيه بيئة التطوير: هذا الحساب يمثل هوية محاكاة للمشرف العام.')}
+              onClick={() => void logout()}
               aria-label="تسجيل الخروج"
               className="text-on-surface-variant hover:text-error hover:bg-error-container/40 p-1.5 rounded-lg transition-colors"
             >

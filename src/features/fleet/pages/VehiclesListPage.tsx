@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
+import { DeleteEntityDialog } from '../../../components/shared/DeleteEntityDialog';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { EmptyState, ErrorState } from '../../../components/ui/EmptyState';
@@ -13,7 +14,16 @@ import { useCarriers } from '../../carriers/api';
 import { useDebouncedValue } from '../../carriers/useDebouncedValue';
 import { Pager, Panel, Select, TableShell, Td, Th } from '../../geo/components/common';
 import { usePageReset } from '../../geo/usePageReset';
-import { SERVICE_CLASS_LABEL, useVehicles, VEHICLE_STATUS_LABEL, VEHICLE_STATUS_VARIANT, type VehicleStatus } from '../api';
+import {
+  SERVICE_CLASS_LABEL,
+  useDeleteVehicle,
+  useSetVehicleStatus,
+  useVehicles,
+  VEHICLE_STATUS_LABEL,
+  VEHICLE_STATUS_VARIANT,
+  type Vehicle,
+  type VehicleStatus,
+} from '../api';
 import { layoutStats } from '../seatLayout';
 
 const PAGE_SIZE = 20;
@@ -26,6 +36,10 @@ export const VehiclesListPage: React.FC = () => {
   const [companyId, setCompanyId] = React.useState('');
   const [status, setStatus] = React.useState<VehicleStatus | ''>('');
   const [page, setPage] = usePageReset(`${q}|${companyId}|${status}`);
+  const [deleting, setDeleting] = React.useState<Vehicle | null>(null);
+  const remove = useDeleteVehicle();
+  const retire = useSetVehicleStatus();
+  const canManage = can('fleet.manage');
 
   const carriers = useCarriers({ pageSize: 100 });
   const vehicles = useVehicles({ page, pageSize: PAGE_SIZE, q: q || undefined, companyId: companyId || undefined, status: status || undefined });
@@ -79,15 +93,20 @@ export const VehiclesListPage: React.FC = () => {
                 <Th>السعة</Th>
                 <Th>المزايا</Th>
                 <Th>الحالة</Th>
+                <Th className="text-left">إجراءات</Th>
               </>
             }
           >
             {rows.map((v) => {
               const stats = layoutStats(v.seatLayout);
               return (
-                <tr key={v.id} className="border-t border-surface-container hover:bg-surface-container/50">
+                <tr
+                  key={v.id}
+                  className="border-t border-surface-container hover:bg-surface-container/50 cursor-pointer"
+                  onClick={() => navigate(`/fleet/vehicles/${v.id}`)}
+                >
                   <Td>
-                    <Link to={`/fleet/vehicles/${v.id}`} className="font-semibold text-secondary">{v.plateNumber}</Link>
+                    <Link to={`/fleet/vehicles/${v.id}`} onClick={(e) => e.stopPropagation()} className="font-semibold text-secondary">{v.plateNumber}</Link>
                   </Td>
                   <Td>{v.model}</Td>
                   <Td>{v.company.name}</Td>
@@ -109,6 +128,15 @@ export const VehiclesListPage: React.FC = () => {
                   <Td>
                     <Badge variant={VEHICLE_STATUS_VARIANT[v.status]} dot>{VEHICLE_STATUS_LABEL[v.status]}</Badge>
                   </Td>
+                  <Td className="text-left whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                    <Button size="sm" variant="ghost" icon="visibility" onClick={() => navigate(`/fleet/vehicles/${v.id}`)}>عرض</Button>
+                    {canManage && (
+                      <>
+                        <Button size="sm" variant="ghost" icon="edit" onClick={() => navigate(`/fleet/vehicles/${v.id}/edit`)}>تعديل</Button>
+                        <Button size="sm" variant="ghost" icon="delete" className="text-error" onClick={() => setDeleting(v)}>حذف</Button>
+                      </>
+                    )}
+                  </Td>
                 </tr>
               );
             })}
@@ -116,6 +144,24 @@ export const VehiclesListPage: React.FC = () => {
         )}
         <Pager meta={vehicles.data?.meta} busy={vehicles.isFetching} onPage={setPage} />
       </Panel>
+
+      <DeleteEntityDialog
+        open={deleting !== null}
+        onOpenChange={(o) => !o && setDeleting(null)}
+        entityLabel="الحافلة"
+        name={deleting?.plateNumber ?? ''}
+        description={<p>الحافلة التي لها رحلات أو سجل مواقع GPS لا تُحذف؛ أخرجها من الخدمة بدلًا من ذلك.</p>}
+        onDelete={() => remove.mutateAsync(deleting!.id)}
+        alternative={
+          deleting && deleting.status !== 'RETIRED'
+            ? {
+                label: 'إخراج من الخدمة',
+                description: 'تُعلَّم الحافلة «خارج الخدمة» فلا تظهر في التعيين والجدولة، ويبقى سجل رحلاتها كما هو.',
+                run: () => retire.mutateAsync({ id: deleting.id, status: 'RETIRED' }),
+              }
+            : undefined
+        }
+      />
     </div>
   );
 };

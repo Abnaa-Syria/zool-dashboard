@@ -26,6 +26,23 @@ const routeLabelMap: Record<string, string> = {
   roles: 'الأدوار والصلاحيات',
   audit: 'سجل الأنشطة والتدقيق',
   settings: 'الإعدادات العامة',
+  network: 'الشبكة والأسطول',
+  fleet: 'الأسطول',
+  cities: 'المدن',
+  stations: 'المحطات',
+  amenities: 'المزايا',
+  routes: 'المسارات',
+  trips: 'الرحلات والجدولة',
+  vehicles: 'الحافلات',
+  drivers: 'السائقون',
+  marketing: 'التسويق',
+  coupons: 'القسائم',
+  content: 'صفحات المحتوى',
+  'carrier-settlements': 'تسويات شركات النقل',
+  'topup-queue': 'طلبات الشحن',
+  activity: 'سجل النشاط',
+  new: 'جديد',
+  edit: 'تعديل',
 };
 
 export const Breadcrumbs: React.FC<{ items?: BreadcrumbItem[]; className?: string }> = ({

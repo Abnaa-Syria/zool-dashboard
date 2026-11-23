@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
@@ -17,6 +17,7 @@ import { useDebouncedValue } from '../useDebouncedValue';
 const PAGE_SIZE = 20;
 
 export const CarriersListPage: React.FC = () => {
+  const navigate = useNavigate();
   const { can } = useAuth();
   const [search, setSearch] = React.useState('');
   const q = useDebouncedValue(search.trim(), 300);
@@ -84,13 +85,14 @@ export const CarriersListPage: React.FC = () => {
                   <th className="py-2 px-2 font-medium">الحالة</th>
                   <th className="py-2 px-2 font-medium">المكاتب المرتبطة</th>
                   <th className="py-2 px-2 font-medium">تاريخ الإضافة</th>
+                  <th className="py-2 px-2" />
                 </tr>
               </thead>
               <tbody>
                 {rows.map((c) => (
-                  <tr key={c.id} className="border-t border-surface-container hover:bg-surface-container/50">
+                  <tr key={c.id} className="border-t border-surface-container hover:bg-surface-container/50 cursor-pointer" onClick={() => navigate(`/companies/${c.id}`)}>
                     <td className="py-2 px-2">
-                      <Link to={`/companies/${c.id}`} className="font-semibold text-secondary">{c.name}</Link>
+                      <Link to={`/companies/${c.id}`} className="font-semibold text-secondary" onClick={(e) => e.stopPropagation()}>{c.name}</Link>
                     </td>
                     <td className="py-2 px-2 font-mono text-xs" dir="ltr">{c.key}</td>
                     <td className="py-2 px-2">
@@ -98,6 +100,9 @@ export const CarriersListPage: React.FC = () => {
                     </td>
                     <td className="py-2 px-2 tabular-nums">{c.assignmentCount?.toLocaleString('en-US') ?? '—'}</td>
                     <td className="py-2 px-2 text-on-surface-variant">{formatDateTime(c.createdAt)}</td>
+                    <td className="py-2 px-2 text-left">
+                      <Link to={`/companies/${c.id}`} className="text-secondary font-medium" onClick={(e) => e.stopPropagation()}>عرض</Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>

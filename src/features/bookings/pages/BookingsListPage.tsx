@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
@@ -184,6 +184,7 @@ export const BookingsListPage: React.FC = () => {
                 <TableHead>القيمة</TableHead>
                 <TableHead>الحالة</TableHead>
                 <TableHead>تاريخ التأكيد</TableHead>
+                <TableHead />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -210,6 +211,12 @@ export const BookingsListPage: React.FC = () => {
                     <Badge variant={bookingStatusVariant(b.status)}>{BOOKING_STATUS_LABEL[b.status]}</Badge>
                   </TableCell>
                   <TableCell className="text-on-surface-variant">{formatDateTime(b.confirmedAt ?? b.createdAt)}</TableCell>
+                  <TableCell>
+                    <Link to={`/bookings/${b.id}`} className="inline-flex items-center gap-1 text-xs text-secondary font-medium" onClick={(e) => e.stopPropagation()}>
+                      <span className="material-symbols-outlined text-[16px]">visibility</span>
+                      عرض
+                    </Link>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

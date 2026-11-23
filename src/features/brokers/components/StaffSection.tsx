@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { DeleteEntityDialog } from '../../../components/shared/DeleteEntityDialog';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { EmptyState } from '../../../components/ui/EmptyState';
@@ -8,6 +9,7 @@ import { errorMessage } from '../../../lib/api/errors';
 import { formatDateTime } from '../../../lib/dates';
 import { useAuth } from '../../auth/auth-context';
 import {
+  useDeleteStaff,
   OFFICE_STATUS_LABEL,
   useCreateStaff,
   useUpdateStaff,
@@ -30,6 +32,9 @@ export const StaffSection: React.FC<{ office: BrokerOfficeDetail }> = ({ office 
   const { can } = useAuth();
   const manage = can('brokers.manage');
   const [editing, setEditing] = React.useState<BrokerEmployee | 'new' | null>(null);
+  const [deleting, setDeleting] = React.useState<BrokerEmployee | null>(null);
+  const remove = useDeleteStaff(office.id);
+  const update = useUpdateStaff(office.id);
 
   return (
     <section className="bg-surface-container-lowest border border-surface-container-high rounded-xl p-space-md space-y-space-sm">
@@ -73,6 +78,7 @@ export const StaffSection: React.FC<{ office: BrokerOfficeDetail }> = ({ office 
                   {manage && (
                     <td className="py-2 px-2 text-left">
                       <Button size="sm" variant="ghost" icon="edit" onClick={() => setEditing(e)}>تعديل</Button>
+                      <Button size="sm" variant="ghost" icon="delete" className="text-error" onClick={() => setDeleting(e)}>حذف</Button>
                     </td>
                   )}
                 </tr>
@@ -81,6 +87,23 @@ export const StaffSection: React.FC<{ office: BrokerOfficeDetail }> = ({ office 
           </table>
         </div>
       )}
+      <DeleteEntityDialog
+        open={deleting !== null}
+        onOpenChange={(o) => !o && setDeleting(null)}
+        entityLabel="الموظف"
+        name={deleting?.displayName ?? ''}
+        description={<p>يُحذف حساب الموظف ويفقد الدخول فورًا. لا يُسمح بالحذف إذا أصدر حجوزات أو طلبات شحن.</p>}
+        onDelete={() => remove.mutateAsync(deleting!.id)}
+        alternative={
+          deleting?.status === 'ACTIVE'
+            ? {
+                label: 'إيقاف الموظف',
+                description: 'إيقاف الموظف يمنعه من الدخول مع الإبقاء على حجوزاته وسجله.',
+                run: () => update.mutateAsync({ employeeId: deleting.id, changes: { status: 'SUSPENDED' } }),
+              }
+            : undefined
+        }
+      />
       {editing && <StaffModal officeId={office.id} employee={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}
     </section>
   );

@@ -98,6 +98,14 @@ export type CreateOfficeInput = {
 };
 
 export type CreateStaffInput = StaffFlags & { displayName: string; phone: string };
+/** PATCH /brokers/:officeId — policy overrides only (name and code are not editable by the API). */
+export type OfficePolicyPatch = Partial<{
+  settlementPeriod: SettlementPeriod;
+  minTopUpMinorOverride: number | null;
+  exposureCeilingOverride: number | null;
+  lowBalanceThresholdMinorOverride: number | null;
+  timeZone: string | null;
+}>;
 export type UpdateStaffInput = Partial<StaffFlags & { displayName: string; status: OfficeStatus }>;
 
 export const brokerKeys = {
@@ -142,6 +150,32 @@ export function useCreateOffice() {
   const invalidate = useInvalidateBrokers();
   return useMutation({
     mutationFn: (input: CreateOfficeInput) => api.post<BrokerOfficeDetail>('/brokers', input).then((r) => r.data),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateOfficePolicy(id: string) {
+  const invalidate = useInvalidateBrokers();
+  return useMutation({
+    mutationFn: (patch: OfficePolicyPatch) => api.patch<BrokerOfficeDetail>(`/brokers/${id}`, patch).then((r) => r.data),
+    onSuccess: invalidate,
+  });
+}
+
+/** DELETE /brokers/:officeId — only without bookings, wallet history or balance (409 ENTITY_IN_USE otherwise). */
+export function useDeleteOffice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<{ deleted: boolean }>(`/brokers/${id}`).then((r) => r.data),
+    onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: [...brokerKeys.all, 'list'] }), qc.invalidateQueries({ queryKey: ['admin-wallets'] })]),
+  });
+}
+
+/** DELETE /brokers/:officeId/staff/:employeeId — only for staff without bookings or top-ups. */
+export function useDeleteStaff(id: string) {
+  const invalidate = useInvalidateBrokers();
+  return useMutation({
+    mutationFn: (employeeId: string) => api.delete<{ deleted: boolean }>(`/brokers/${id}/staff/${employeeId}`).then((r) => r.data),
     onSuccess: invalidate,
   });
 }

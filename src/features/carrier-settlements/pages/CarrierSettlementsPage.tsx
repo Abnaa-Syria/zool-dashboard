@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
@@ -22,7 +22,6 @@ import {
 } from '../api';
 import { DIRECTION_LABEL } from '../breakdown';
 import { CarrierSelect } from '../components/CarrierSelect';
-import { CarrierSettlementDrawer } from '../components/CarrierSettlementDrawer';
 import { CreateCarrierSettlementModal } from '../components/CreateCarrierSettlementModal';
 
 const PAGE_SIZE = 20;
@@ -35,7 +34,7 @@ export const CarrierSettlementsPage: React.FC = () => {
   const [status, setStatus] = React.useState<CarrierSettlementStatus | ''>('');
   const [page, setPage] = usePageReset(`${companyId}|${status}`);
   const [createOpen, setCreateOpen] = React.useState(false);
-  const [openId, setOpenId] = React.useState<string | null>(null);
+  const navigate = useNavigate();
   const carriers = useCarriers({ page: 1, pageSize: 100 });
   const list = useCarrierSettlements({ page, pageSize: PAGE_SIZE, companyId: companyId || undefined, status: status || undefined });
   const rows = list.data?.data ?? [];
@@ -95,9 +94,9 @@ export const CarrierSettlementsPage: React.FC = () => {
               </thead>
               <tbody>
                 {rows.map((s) => (
-                  <tr key={s.id} className="border-t border-surface-container hover:bg-surface-container/50">
+                  <tr key={s.id} onClick={() => navigate(`/financials/carrier-settlements/${s.id}`)} className="border-t border-surface-container hover:bg-surface-container/50 cursor-pointer">
                     <td className="py-2 px-2">
-                      <Link to={`/companies/${s.company.id}`} className="font-semibold text-secondary">{s.company.name}</Link>
+                      <Link to={`/companies/${s.company.id}`} onClick={(e) => e.stopPropagation()} className="font-semibold text-secondary">{s.company.name}</Link>
                     </td>
                     <td className="py-2 px-2 tabular-nums whitespace-nowrap" dir="ltr">{formatPeriod(s.periodFrom, s.periodTo)}</td>
                     <td className="py-2 px-2 tabular-nums">{s.ticketsCount}</td>
@@ -111,7 +110,9 @@ export const CarrierSettlementsPage: React.FC = () => {
                     <td className="py-2 px-2 font-mono text-xs" dir="ltr">{s.paymentReference ?? '—'}</td>
                     <td className="py-2 px-2 text-on-surface-variant">{formatDateTime(s.createdAt)}</td>
                     <td className="py-2 px-2 text-left">
-                      <Button size="sm" variant="ghost" onClick={() => setOpenId(s.id)}>التفاصيل</Button>
+                      <Link to={`/financials/carrier-settlements/${s.id}`} onClick={(e) => e.stopPropagation()}>
+                        <Button size="sm" variant="outline" icon="visibility">عرض</Button>
+                      </Link>
                     </td>
                   </tr>
                 ))}
@@ -129,11 +130,10 @@ export const CarrierSettlementsPage: React.FC = () => {
           onClose={() => setCreateOpen(false)}
           onCreated={(s) => {
             setCreateOpen(false);
-            setOpenId(s.id);
+            navigate(`/financials/carrier-settlements/${s.id}`);
           }}
         />
       )}
-      {openId && <CarrierSettlementDrawer key={openId} id={openId} onClose={() => setOpenId(null)} />}
     </div>
   );
 };

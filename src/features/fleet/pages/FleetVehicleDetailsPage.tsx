@@ -1,6 +1,8 @@
 import * as React from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
+import { DeleteEntityDialog } from '../../../components/shared/DeleteEntityDialog';
+import { Field, FieldGrid, Mono } from '../../../components/shared/DetailFields';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { ErrorState } from '../../../components/ui/EmptyState';
@@ -10,23 +12,21 @@ import { errorMessage } from '../../../lib/api/errors';
 import { formatDateTime } from '../../../lib/dates';
 import { useAuth } from '../../auth/auth-context';
 import { Panel } from '../../geo/components/common';
-import { SERVICE_CLASS_LABEL, useVehicle, VEHICLE_STATUS_LABEL, VEHICLE_STATUS_VARIANT } from '../api';
+import { RelatedTripsSection } from '../../network/components/RelatedTripsSection';
+import { SERVICE_CLASS_LABEL, useDeleteVehicle, useUpdateVehicle, useVehicle, VEHICLE_STATUS_LABEL, VEHICLE_STATUS_VARIANT } from '../api';
 import { SeatGrid, SeatLegend } from '../components/SeatGrid';
 import { layoutStats } from '../seatLayout';
 
-const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
-  <div className="flex flex-col gap-0.5">
-    <dt className="text-xs text-on-surface-variant">{label}</dt>
-    <dd className="text-sm text-on-surface">{children}</dd>
-  </div>
-);
-
-/** `/fleet/vehicles/:id` — profile, amenities and the seat layout (read-only). */
+/** `/fleet/vehicles/:id` — profile, amenities, seat layout and trips; edit / delete (or retire). */
 export const FleetVehicleDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { can } = useAuth();
   const navigate = useNavigate();
   const vehicle = useVehicle(id);
+  const update = useUpdateVehicle(id ?? '');
+  const remove = useDeleteVehicle();
+  const [deleting, setDeleting] = React.useState(false);
+  const canManage = can('fleet.manage');
   const v = vehicle.data;
   const stats = v ? layoutStats(v.seatLayout) : null;
 
@@ -44,16 +44,30 @@ export const FleetVehicleDetailsPage: React.FC = () => {
             subtitle={`${v.model} · ${v.company.name}`}
             className="mb-0"
             badge={<Badge variant={VEHICLE_STATUS_VARIANT[v.status]} dot>{VEHICLE_STATUS_LABEL[v.status]}</Badge>}
-            actions={can('fleet.manage') ? <Button variant="outline" icon="edit" onClick={() => navigate(`/fleet/vehicles/${v.id}/edit`)}>تعديل</Button> : null}
+            actions={
+              canManage ? (
+                <>
+                  <Button variant="outline" icon="edit" onClick={() => navigate(`/fleet/vehicles/${v.id}/edit`)}>تعديل</Button>
+                  <Button variant="danger" icon="delete" onClick={() => setDeleting(true)}>حذف</Button>
+                </>
+              ) : null
+            }
           />
 
           <Panel>
-            <dl className="grid gap-space-md sm:grid-cols-2 lg:grid-cols-4">
-              <Field label="الشركة">{v.company.name}</Field>
+            <FieldGrid>
+              <Field label="رقم اللوحة"><Mono>{v.plateNumber}</Mono></Field>
+              <Field label="الطراز">{v.model}</Field>
+              <Field label="الشركة">
+                <Link to={`/companies/${v.company.id}`} className="text-secondary font-medium">{v.company.name}</Link>
+              </Field>
+              <Field label="الحالة">{VEHICLE_STATUS_LABEL[v.status]}</Field>
               <Field label="فئة الخدمة">{SERVICE_CLASS_LABEL[v.serviceClass]}</Field>
               <Field label="السعة"><span className="tabular-nums">{v.capacity}</span> مقعدًا ({stats.womenOnly} للنساء)</Field>
+              <Field label="تاريخ الإضافة">{formatDateTime(v.createdAt)}</Field>
               <Field label="آخر تحديث">{formatDateTime(v.updatedAt)}</Field>
-            </dl>
+              <Field label="المعرّف"><Mono>{v.id}</Mono></Field>
+            </FieldGrid>
           </Panel>
 
           <Panel className="flex flex-col gap-space-sm">
@@ -86,6 +100,27 @@ export const FleetVehicleDetailsPage: React.FC = () => {
               <SeatGrid layout={v.seatLayout} />
             </div>
           </Panel>
+
+          <RelatedTripsSection scope={{ vehicleId: v.id }} title="رحلات الحافلة" hide={['vehicle']} />
+
+          <DeleteEntityDialog
+            open={deleting}
+            onOpenChange={setDeleting}
+            entityLabel="الحافلة"
+            name={v.plateNumber}
+            description={<p>الحافلة التي لها رحلات أو سجل مواقع GPS لا تُحذف؛ أخرجها من الخدمة بدلًا من ذلك.</p>}
+            onDelete={() => remove.mutateAsync(v.id)}
+            onDeleted={() => navigate('/fleet/vehicles', { replace: true })}
+            alternative={
+              v.status !== 'RETIRED'
+                ? {
+                    label: 'إخراج من الخدمة',
+                    description: 'تُعلَّم الحافلة «خارج الخدمة» فلا تظهر في التعيين والجدولة، ويبقى سجل رحلاتها كما هو.',
+                    run: () => update.mutateAsync({ status: 'RETIRED' }),
+                  }
+                : undefined
+            }
+          />
         </>
       ) : null}
     </div>

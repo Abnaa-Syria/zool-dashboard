@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
+import { NotDeletableNote } from '../../../components/shared/DetailFields';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { EmptyState, ErrorState } from '../../../components/ui/EmptyState';
@@ -165,6 +166,9 @@ const AccessSection: React.FC<{ admin: AdminUser; isSelf: boolean; canSuspend: b
   return (
     <Section title="الوصول والأمان">
       <div className="space-y-3">
+        <NotDeletableNote>
+          حسابات المشرفين لا تُحذف للحفاظ على سجل التدقيق؛ الإيقاف هو البديل الآمن (يمنع الدخول وينهي الجلسات){admin.isBootstrap ? '، والحساب التأسيسي محمي' : ''}.
+        </NotDeletableNote>
         {canSuspend && (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-outline-variant/40 p-3">
             <div>

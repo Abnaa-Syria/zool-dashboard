@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { DeleteEntityDialog } from '../../../components/shared/DeleteEntityDialog';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { EmptyState, ErrorState } from '../../../components/ui/EmptyState';
@@ -12,6 +13,7 @@ import { useAuth } from '../../auth/auth-context';
 import {
   useCarrierStaff,
   useCreateCarrierStaff,
+  useDeleteCarrierStaff,
   useUpdateCarrierStaff,
   type CarrierEmployee,
   type CarrierStaffFlags,
@@ -44,6 +46,8 @@ export const CarrierStaffSection: React.FC<{ companyId: string }> = ({ companyId
   const manage = can('carriers.manage');
   const staff = useCarrierStaff(companyId);
   const [editing, setEditing] = React.useState<CarrierEmployee | 'new' | null>(null);
+  const [deleting, setDeleting] = React.useState<CarrierEmployee | null>(null);
+  const remove = useDeleteCarrierStaff(companyId);
   const rows = staff.data ?? [];
 
   return (
@@ -98,6 +102,7 @@ export const CarrierStaffSection: React.FC<{ companyId: string }> = ({ companyId
                   {manage && (
                     <td className="py-2 px-2 text-left">
                       <Button size="sm" variant="ghost" icon="edit" onClick={() => setEditing(e)}>تعديل</Button>
+                      <Button size="sm" variant="ghost" icon="delete" className="text-error" onClick={() => setDeleting(e)}>حذف</Button>
                     </td>
                   )}
                 </tr>
@@ -106,6 +111,14 @@ export const CarrierStaffSection: React.FC<{ companyId: string }> = ({ companyId
           </table>
         </div>
       )}
+      <DeleteEntityDialog
+        open={deleting !== null}
+        onOpenChange={(o) => !o && setDeleting(null)}
+        entityLabel="حساب الموظف"
+        name={deleting?.displayName ?? ''}
+        description={<p>يُحذف حساب البوابة ويفقد الموظف الدخول فورًا. لا يمكن حذف آخر مدير نشط للشركة؛ لإيقاف الدخول مؤقتًا استخدم «تعديل ← الحالة: موقوف».</p>}
+        onDelete={() => remove.mutateAsync(deleting!.id)}
+      />
       {editing && <StaffModal companyId={companyId} employee={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}
     </section>
   );

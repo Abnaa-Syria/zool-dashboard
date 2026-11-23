@@ -7,16 +7,23 @@ import { ErrorState } from '../../../components/ui/EmptyState';
 import { Input } from '../../../components/ui/Input';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { Skeleton } from '../../../components/ui/Skeleton';
+import { DeleteEntityDialog } from '../../../components/shared/DeleteEntityDialog';
 import { errorMessage } from '../../../lib/api/errors';
+import { useAuth } from '../../auth/auth-context';
 import { formatDateTime } from '../../../lib/dates';
-import { KNOWN_PAGES, SLUG_RE, useContentPages, type ContentPage } from '../api';
+import { KNOWN_PAGES, SLUG_RE, useContentPages, useDeleteContent, type ContentPage } from '../api';
+import { ContentDeleteNote } from '../components/ContentDeleteNote';
 
 type Row = { slug: string; label?: string; page?: ContentPage };
 
 export const ContentPagesListPage: React.FC = () => {
   const navigate = useNavigate();
+  const { can } = useAuth();
+  const canManage = can('content.manage');
   const pages = useContentPages();
+  const remove = useDeleteContent();
   const [newSlug, setNewSlug] = React.useState('');
+  const [deleting, setDeleting] = React.useState<ContentPage | null>(null);
 
   const rows: Row[] = React.useMemo(() => {
     const bySlug = new Map((pages.data ?? []).map((p) => [p.slug, p]));
@@ -62,7 +69,11 @@ export const ContentPagesListPage: React.FC = () => {
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.slug} className="border-t border-surface-container hover:bg-surface-container/50">
+                  <tr
+                    key={r.slug}
+                    className="border-t border-surface-container hover:bg-surface-container/50 cursor-pointer"
+                    onClick={() => navigate(`/content/${r.slug}`)}
+                  >
                     <td className="py-2 px-2">
                       <Link to={`/content/${r.slug}`} className="font-semibold text-secondary">{r.page?.titleAr ?? r.label}</Link>
                     </td>
@@ -72,10 +83,15 @@ export const ContentPagesListPage: React.FC = () => {
                     <td className="py-2 px-2 text-on-surface-variant">
                       {r.page ? formatDateTime(r.page.publishedAt) : <Badge variant="warning" dot>غير منشورة</Badge>}
                     </td>
-                    <td className="py-2 px-2">
+                    <td className="py-2 px-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                       <Button size="sm" variant="outline" icon={r.page ? 'edit' : 'add'} onClick={() => navigate(`/content/${r.slug}`)}>
-                        {r.page ? 'تحرير' : 'إنشاء'}
+                        {r.page ? 'عرض وتحرير' : 'إنشاء'}
                       </Button>
+                      {canManage && r.page && (
+                        <Button size="sm" variant="ghost" icon="delete" className="text-error" onClick={() => setDeleting(r.page!)}>
+                          حذف
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -94,9 +110,20 @@ export const ContentPagesListPage: React.FC = () => {
           <Button type="submit" icon="arrow_back" disabled={!SLUG_RE.test(newSlug) || slugTaken}>متابعة للتحرير</Button>
         </form>
         <p className="text-xs text-on-surface-variant mt-2">
-          المعرّف ثابت ويُستخدم في رابط التطبيق (<span dir="ltr" className="font-mono">/public/content/&lt;slug&gt;</span>). لا يمكن حذف صفحة بعد نشرها.
+          المعرّف ثابت ويُستخدم في رابط التطبيق (<span dir="ltr" className="font-mono">/public/content/&lt;slug&gt;</span>). النشر بمعرّف جديد ينشئ الصفحة.
         </p>
       </section>
+
+      {deleting && (
+        <DeleteEntityDialog
+          open
+          onOpenChange={(o) => !o && setDeleting(null)}
+          entityLabel="الصفحة"
+          name={deleting.titleAr}
+          description={<ContentDeleteNote slug={deleting.slug} />}
+          onDelete={() => remove.mutateAsync(deleting.slug)}
+        />
+      )}
     </div>
   );
 };

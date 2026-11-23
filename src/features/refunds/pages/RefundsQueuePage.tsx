@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
@@ -14,7 +14,6 @@ import { useDebouncedValue } from '../../carriers/useDebouncedValue';
 import { Pager } from '../../financials/components/Pager';
 import { selectClass, usePageReset } from '../../financials/listState';
 import { REFUND_REASON_LABEL, REFUND_STATUS_LABEL, REFUND_STATUS_VARIANT, refundErrorMessage, useRefunds, type RefundReason, type RefundStatus } from '../api';
-import { RefundDetailsDrawer } from '../components/RefundDetailsDrawer';
 
 const PAGE_SIZE = 20;
 
@@ -28,14 +27,12 @@ export const RefundsQueuePage: React.FC = () => {
   const [status, setStatus] = React.useState<RefundStatus | ''>('');
   const [reason, setReason] = React.useState<RefundReason | ''>('');
   const [page, setPage] = usePageReset(`${q}|${status}|${reason}`);
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
-  const [notice, setNotice] = React.useState<string | null>(null);
+  const navigate = useNavigate();
 
   const refunds = useRefunds({ page, pageSize: PAGE_SIZE, q: q || undefined, status: status || undefined, reason: reason || undefined });
   const rows = refunds.data?.data ?? [];
   const meta = refunds.data?.meta;
   const filtered = Boolean(q || status || reason);
-  const selected = rows.find((r) => r.id === selectedId);
 
   return (
     <div className="flex flex-col w-full pb-space-xl gap-space-md">
@@ -84,13 +81,6 @@ export const RefundsQueuePage: React.FC = () => {
         </select>
       </div>
 
-      {notice && (
-        <div role="status" className="flex items-center justify-between rounded-lg px-3 py-2 text-sm bg-primary-fixed text-on-primary-fixed">
-          <span>{notice}</span>
-          <button type="button" aria-label="إغلاق" onClick={() => setNotice(null)} className="material-symbols-outlined text-[18px]">close</button>
-        </div>
-      )}
-
       <section className="bg-surface-container-lowest border border-surface-container-high rounded-xl p-space-md">
         {refunds.isLoading ? (
           <Skeleton className="h-48 rounded-lg" />
@@ -123,16 +113,16 @@ export const RefundsQueuePage: React.FC = () => {
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.id} className="border-t border-surface-container hover:bg-surface-container/50 align-top">
+                  <tr key={r.id} onClick={() => navigate(`/refunds/${r.id}`)} className="border-t border-surface-container hover:bg-surface-container/50 align-top cursor-pointer">
                     <td className="py-2 px-2">
-                      <Link to={`/bookings/${r.booking.id}`} className="font-mono text-xs font-semibold text-secondary" dir="ltr">
+                      <Link to={`/bookings/${r.booking.id}`} onClick={(e) => e.stopPropagation()} className="font-mono text-xs font-semibold text-secondary" dir="ltr">
                         {r.booking.bookingRef ?? r.booking.id}
                       </Link>
                     </td>
                     <td className="py-2 px-2">
                       {r.customer ? (
                         <>
-                          <Link to={`/travelers/${r.customer.id}`} className="font-semibold text-secondary">{r.customer.displayName ?? 'بدون اسم'}</Link>
+                          <Link to={`/travelers/${r.customer.id}`} onClick={(e) => e.stopPropagation()} className="font-semibold text-secondary">{r.customer.displayName ?? 'بدون اسم'}</Link>
                           {r.customer.phone && <div className="font-mono text-xs text-on-surface-variant" dir="ltr">{r.customer.phone}</div>}
                         </>
                       ) : (
@@ -151,7 +141,9 @@ export const RefundsQueuePage: React.FC = () => {
                     </td>
                     <td className="py-2 px-2 text-on-surface-variant">{formatDateTime(r.createdAt)}</td>
                     <td className="py-2 px-2">
-                      <Button size="sm" variant="outline" icon="visibility" onClick={() => setSelectedId(r.id)}>التفاصيل</Button>
+                      <Link to={`/refunds/${r.id}`} onClick={(e) => e.stopPropagation()}>
+                        <Button size="sm" variant="outline" icon="visibility">عرض</Button>
+                      </Link>
                     </td>
                   </tr>
                 ))}
@@ -161,15 +153,6 @@ export const RefundsQueuePage: React.FC = () => {
         )}
         <Pager meta={meta} busy={refunds.isFetching} onPage={setPage} />
       </section>
-
-      {selectedId && (
-        <RefundDetailsDrawer
-          refundId={selectedId}
-          initial={selected}
-          onClose={() => setSelectedId(null)}
-          onDone={(text) => setNotice(text)}
-        />
-      )}
     </div>
   );
 };

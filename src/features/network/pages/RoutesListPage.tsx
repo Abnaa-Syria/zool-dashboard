@@ -1,5 +1,7 @@
 import * as React from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
+import { DeleteEntityDialog } from '../../../components/shared/DeleteEntityDialog';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { EmptyState, ErrorState } from '../../../components/ui/EmptyState';
@@ -9,7 +11,7 @@ import { errorMessage } from '../../../lib/api/errors';
 import { useAuth } from '../../auth/auth-context';
 import { useCarriers } from '../../carriers/api';
 import { Pager } from '../../financials/components/Pager';
-import { useRoutes, useStationOptions, useUpdateRoute, type RouteDto } from '../api';
+import { routeLabel, useDeleteRoute, useRoutes, useStationOptions, useUpdateRoute, type RouteDto } from '../api';
 import { RouteFormModal } from '../components/RouteFormModal';
 import { selectClass, StationSelect } from '../components/fields';
 import { formatDuration } from '../time';
@@ -24,6 +26,9 @@ export const RoutesListPage: React.FC = () => {
   const [active, setActive] = React.useState<'' | 'true' | 'false'>('');
   const [page, setPage] = React.useState(1);
   const [editing, setEditing] = React.useState<RouteDto | null | 'new'>(null);
+  const [deleting, setDeleting] = React.useState<RouteDto | null>(null);
+  const remove = useDeleteRoute();
+  const navigate = useNavigate();
 
   const filterKey = `${companyId}|${stationId}|${active}`;
   const [prevKey, setPrevKey] = React.useState(filterKey);
@@ -90,13 +95,21 @@ export const RoutesListPage: React.FC = () => {
                   <th className="py-2 px-2 font-medium">المدة</th>
                   <th className="py-2 px-2 font-medium">التوقفات</th>
                   <th className="py-2 px-2 font-medium">الحالة</th>
-                  {canManage && <th className="py-2 px-2 font-medium" />}
+                  <th className="py-2 px-2 font-medium text-left">إجراءات</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.id} className="border-t border-surface-container hover:bg-surface-container/50 align-top">
-                    <td className="py-2 px-2 font-mono text-xs" dir="ltr">{r.code ?? '—'}</td>
+                  <tr
+                    key={r.id}
+                    className="border-t border-surface-container hover:bg-surface-container/50 align-top cursor-pointer"
+                    onClick={() => navigate(`/network/routes/${r.id}`)}
+                  >
+                    <td className="py-2 px-2 font-mono text-xs" dir="ltr">
+                      <Link to={`/network/routes/${r.id}`} onClick={(e) => e.stopPropagation()} className="text-secondary font-semibold">
+                        {r.code ?? '—'}
+                      </Link>
+                    </td>
                     <td className="py-2 px-2">{r.company.name}</td>
                     <td className="py-2 px-2">
                       <div className="font-semibold">{r.originStation.city.nameAr} ← {r.destinationStation.city.nameAr}</div>
@@ -109,19 +122,23 @@ export const RoutesListPage: React.FC = () => {
                     <td className="py-2 px-2">
                       <Badge variant={r.isActive ? 'success' : 'neutral'} dot>{r.isActive ? 'نشط' : 'غير نشط'}</Badge>
                     </td>
-                    {canManage && (
-                      <td className="py-2 px-2 text-left whitespace-nowrap">
-                        <Button size="sm" variant="ghost" icon="edit" onClick={() => setEditing(r)}>تعديل</Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={toggle.isPending}
-                          onClick={() => toggle.mutate({ id: r.id, patch: { isActive: !r.isActive } })}
-                        >
-                          {r.isActive ? 'تعطيل' : 'تفعيل'}
-                        </Button>
-                      </td>
-                    )}
+                    <td className="py-2 px-2 text-left whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <Button size="sm" variant="ghost" icon="visibility" onClick={() => navigate(`/network/routes/${r.id}`)}>عرض</Button>
+                      {canManage && (
+                        <>
+                          <Button size="sm" variant="ghost" icon="edit" onClick={() => setEditing(r)}>تعديل</Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={toggle.isPending}
+                            onClick={() => toggle.mutate({ id: r.id, patch: { isActive: !r.isActive } })}
+                          >
+                            {r.isActive ? 'تعطيل' : 'تفعيل'}
+                          </Button>
+                          <Button size="sm" variant="ghost" icon="delete" className="text-error" onClick={() => setDeleting(r)}>حذف</Button>
+                        </>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -131,6 +148,23 @@ export const RoutesListPage: React.FC = () => {
         <Pager meta={meta} busy={routes.isFetching} onPage={setPage} />
       </section>
 
+      <DeleteEntityDialog
+        open={deleting !== null}
+        onOpenChange={(o) => !o && setDeleting(null)}
+        entityLabel="المسار"
+        name={deleting ? routeLabel(deleting) : ''}
+        description={<p>تُحذف التوقفات معه. المسار الذي جُدولت عليه رحلات لا يُحذف؛ عطّله بدلًا من ذلك.</p>}
+        onDelete={() => remove.mutateAsync(deleting!.id)}
+        alternative={
+          deleting?.isActive
+            ? {
+                label: 'تعطيل المسار',
+                description: 'تعطيل المسار يمنع جدولة رحلات جديدة عليه ويُبقي رحلاته وحجوزاتها كما هي.',
+                run: () => toggle.mutateAsync({ id: deleting.id, patch: { isActive: false } }),
+              }
+            : undefined
+        }
+      />
       {editing && <RouteFormModal route={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}
     </div>
   );

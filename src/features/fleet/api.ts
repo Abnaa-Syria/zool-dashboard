@@ -81,6 +81,7 @@ export const fleetKeys = {
   vehicles: (f: VehicleFilters) => [...fleetKeys.all, 'vehicles', f] as const,
   vehicle: (id: string) => [...fleetKeys.all, 'vehicle', id] as const,
   drivers: (f: DriverFilters) => [...fleetKeys.all, 'drivers', f] as const,
+  driver: (id: string) => [...fleetKeys.all, 'driver', id] as const,
 };
 
 export function useVehicles(filters: VehicleFilters) {
@@ -115,6 +116,47 @@ export function useUpdateVehicle(id: string) {
       qc.setQueryData(fleetKeys.vehicle(id), data);
       return qc.invalidateQueries({ queryKey: fleetKeys.all });
     },
+  });
+}
+
+/** DELETE /admin/vehicles/:id — 409 ENTITY_IN_USE once trips or GPS history exist (retire instead). */
+export function useDeleteVehicle() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<{ deleted: boolean }>(`/admin/vehicles/${id}`).then((r) => r.data),
+    onSuccess: (_d, id) => {
+      qc.removeQueries({ queryKey: fleetKeys.vehicle(id) });
+      return Promise.all([qc.invalidateQueries({ queryKey: fleetKeys.all }), qc.invalidateQueries({ queryKey: ['network'] })]);
+    },
+  });
+}
+
+export function useDriver(id: string | undefined) {
+  return useQuery({
+    queryKey: fleetKeys.driver(id ?? ''),
+    queryFn: ({ signal }) => api.get<Driver>(`/admin/drivers/${id}`, undefined, signal).then((r) => r.data),
+    enabled: Boolean(id),
+  });
+}
+
+/** DELETE /admin/drivers/:id — 409 ENTITY_IN_USE once the driver has trips/boardings/cash/GPS (suspend instead). */
+export function useDeleteDriver() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<{ deleted: boolean }>(`/admin/drivers/${id}`).then((r) => r.data),
+    onSuccess: (_d, id) => {
+      qc.removeQueries({ queryKey: fleetKeys.driver(id) });
+      return Promise.all([qc.invalidateQueries({ queryKey: fleetKeys.all }), qc.invalidateQueries({ queryKey: ['network'] })]);
+    },
+  });
+}
+
+/** Status-only PATCH for list rows (e.g. retire a vehicle as the safe alternative to delete). */
+export function useSetVehicleStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; status: VehicleStatus }) => api.patch<Vehicle>(`/admin/vehicles/${v.id}`, { status: v.status }).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: fleetKeys.all }),
   });
 }
 

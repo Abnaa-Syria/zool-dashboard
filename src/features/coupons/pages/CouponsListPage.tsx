@@ -1,6 +1,7 @@
 import * as React from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
-import { Badge } from '../../../components/ui/Badge';
+import { DeleteEntityDialog } from '../../../components/shared/DeleteEntityDialog';
 import { Button } from '../../../components/ui/Button';
 import { EmptyState, ErrorState } from '../../../components/ui/EmptyState';
 import { SearchInput } from '../../../components/ui/Input';
@@ -13,20 +14,13 @@ import { useAuth } from '../../auth/auth-context';
 import { useCarriers } from '../../carriers/api';
 import { useDebouncedValue } from '../../carriers/useDebouncedValue';
 import { Pager } from '../../financials/components/Pager';
-import { useCoupons, type Coupon, type CouponFilters } from '../api';
+import { useCoupons, useDeleteCoupon, useUpdateCoupon, type Coupon, type CouponFilters } from '../api';
+import { CouponStateBadge } from '../components/CouponStateBadge';
 import { CreateCouponModal } from '../components/CreateCouponModal';
 import { EditCouponModal } from '../components/EditCouponModal';
 import { formatPercent } from '../convert';
 
 const PAGE_SIZE = 20;
-
-const CouponState: React.FC<{ coupon: Coupon; now: number }> = ({ coupon: c, now }) => {
-  if (!c.isActive) return <Badge variant="neutral" dot>موقوف</Badge>;
-  if (new Date(c.validTo).getTime() <= now) return <Badge variant="warning" dot>منتهي</Badge>;
-  if (c.maxRedemptions !== null && c.redeemedCount >= c.maxRedemptions) return <Badge variant="warning" dot>استُنفد</Badge>;
-  if (new Date(c.validFrom).getTime() > now) return <Badge variant="info" dot>مجدول</Badge>;
-  return <Badge variant="success" dot>ساري</Badge>;
-};
 
 export const CouponsListPage: React.FC = () => {
   const { can } = useAuth();
@@ -38,6 +32,10 @@ export const CouponsListPage: React.FC = () => {
   const [page, setPage] = React.useState(1);
   const [createOpen, setCreateOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Coupon | null>(null);
+  const [deleting, setDeleting] = React.useState<Coupon | null>(null);
+  const navigate = useNavigate();
+  const remove = useDeleteCoupon();
+  const update = useUpdateCoupon();
 
   const filterKey = `${q}|${active}`;
   const [prevFilterKey, setPrevFilterKey] = React.useState(filterKey);
@@ -60,7 +58,7 @@ export const CouponsListPage: React.FC = () => {
       <Breadcrumbs items={[{ label: 'التسويق والمحتوى' }, { label: 'الكوبونات' }]} />
       <PageHeader
         title="الكوبونات"
-        subtitle="كوبونات الخصم لتطبيق المسافر. لا تُحذف الكوبونات؛ أوقفها لمنع استخدامها."
+        subtitle="كوبونات الخصم لتطبيق المسافر. يُحذف الكوبون فقط إذا لم يُستخدم؛ وإلا أوقفه لمنع استخدامه."
         className="mb-0"
         actions={canManage ? <Button icon="add" onClick={() => setCreateOpen(true)}>كوبون جديد</Button> : null}
       />
@@ -105,13 +103,19 @@ export const CouponsListPage: React.FC = () => {
                   <th className="py-2 px-2 font-medium">الصلاحية</th>
                   <th className="py-2 px-2 font-medium">الاستخدام</th>
                   <th className="py-2 px-2 font-medium">الحالة</th>
-                  {canManage && <th className="py-2 px-2 font-medium" />}
+                  <th className="py-2 px-2 font-medium" />
                 </tr>
               </thead>
               <tbody>
                 {rows.map((c) => (
-                  <tr key={c.id} className="border-t border-surface-container hover:bg-surface-container/50 align-top">
-                    <td className="py-2 px-2 font-mono font-semibold" dir="ltr">{c.code}</td>
+                  <tr
+                    key={c.id}
+                    className="border-t border-surface-container hover:bg-surface-container/50 align-top cursor-pointer"
+                    onClick={() => navigate(`/marketing/coupons/${c.id}`)}
+                  >
+                    <td className="py-2 px-2 font-mono font-semibold" dir="ltr">
+                      <Link to={`/marketing/coupons/${c.id}`} className="text-secondary" onClick={(e) => e.stopPropagation()}>{c.code}</Link>
+                    </td>
                     <td className="py-2 px-2 whitespace-nowrap">
                       {c.discountType === 'PERCENT' ? formatPercent(c.value) : formatSdg(c.value)}
                       {c.maxDiscountAmountMinor !== null && (
@@ -130,12 +134,16 @@ export const CouponsListPage: React.FC = () => {
                     <td className="py-2 px-2 tabular-nums whitespace-nowrap">
                       {c.redeemedCount.toLocaleString('en-US')} / {c.maxRedemptions?.toLocaleString('en-US') ?? '∞'}
                     </td>
-                    <td className="py-2 px-2"><CouponState coupon={c} now={now} /></td>
-                    {canManage && (
-                      <td className="py-2 px-2">
-                        <Button size="sm" variant="outline" icon="edit" onClick={() => setEditing(c)}>تعديل</Button>
-                      </td>
-                    )}
+                    <td className="py-2 px-2"><CouponStateBadge coupon={c} now={now} /></td>
+                    <td className="py-2 px-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <Button size="sm" variant="ghost" icon="visibility" onClick={() => navigate(`/marketing/coupons/${c.id}`)}>عرض</Button>
+                      {canManage && (
+                        <>
+                          <Button size="sm" variant="outline" icon="edit" onClick={() => setEditing(c)}>تعديل</Button>
+                          <Button size="sm" variant="ghost" icon="delete" className="text-error" onClick={() => setDeleting(c)}>حذف</Button>
+                        </>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -149,6 +157,25 @@ export const CouponsListPage: React.FC = () => {
         <CreateCouponModal open={createOpen} onOpenChange={setCreateOpen} carriers={carrierList} carriersUnavailable={carriers.isError} />
       )}
       {editing && <EditCouponModal key={editing.id} coupon={editing} onClose={() => setEditing(null)} />}
+      {deleting && (
+        <DeleteEntityDialog
+          open
+          onOpenChange={(o) => !o && setDeleting(null)}
+          entityLabel="الكوبون"
+          name={deleting.code}
+          description={<p>الحذف متاح فقط لكوبون لم يُستخدم في أي حجز.</p>}
+          onDelete={() => remove.mutateAsync(deleting.id)}
+          alternative={
+            deleting.isActive
+              ? {
+                  label: 'إيقاف الكوبون',
+                  description: 'إيقاف الكوبون يمنع استخدامه فورًا ويحفظ سجل الحجوزات التي استخدمته.',
+                  run: () => update.mutateAsync({ id: deleting.id, patch: { isActive: false } }),
+                }
+              : undefined
+          }
+        />
+      )}
     </div>
   );
 };

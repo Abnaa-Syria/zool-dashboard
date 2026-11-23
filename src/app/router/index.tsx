@@ -40,6 +40,15 @@ import { VehiclesListPage } from '../../features/fleet/pages/VehiclesListPage';
 import { VehicleFormPage } from '../../features/fleet/pages/VehicleFormPage';
 import { FleetVehicleDetailsPage } from '../../features/fleet/pages/FleetVehicleDetailsPage';
 import { DriversListPage } from '../../features/fleet/pages/DriversListPage';
+import { DriverDetailsPage } from '../../features/fleet/pages/DriverDetailsPage';
+import { CityDetailsPage } from '../../features/geo/pages/CityDetailsPage';
+import { StationDetailsPage } from '../../features/geo/pages/StationDetailsPage';
+import { AmenityDetailsPage } from '../../features/geo/pages/AmenityDetailsPage';
+import { RouteDetailsPage } from '../../features/network/pages/RouteDetailsPage';
+import { CouponDetailsPage } from '../../features/coupons/pages/CouponDetailsPage';
+import { RefundDetailsPage } from '../../features/refunds/pages/RefundDetailsPage';
+import { SettlementDetailsPage } from '../../features/settlements/pages/SettlementDetailsPage';
+import { CarrierSettlementDetailsPage } from '../../features/carrier-settlements/pages/CarrierSettlementDetailsPage';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -117,6 +126,7 @@ export const router = createBrowserRouter([
         path: 'marketing/coupons',
         element: <CouponsListPage />,
       },
+      { path: 'marketing/coupons/:id', element: <CouponDetailsPage /> },
       {
         path: 'content',
         element: <ContentPagesListPage />,
@@ -127,17 +137,22 @@ export const router = createBrowserRouter([
       },
       // network routes + trips
       { path: 'network/routes', element: <RoutesListPage /> },
+      { path: 'network/routes/:id', element: <RouteDetailsPage /> },
       { path: 'network/trips', element: <TripsListPage /> },
       { path: 'network/trips/:id', element: <TripDetailPage /> },
       // geo + fleet
       { path: 'network/cities', element: <CitiesPage /> },
+      { path: 'network/cities/:id', element: <CityDetailsPage /> },
       { path: 'network/stations', element: <StationsPage /> },
+      { path: 'network/stations/:id', element: <StationDetailsPage /> },
       { path: 'network/amenities', element: <AmenitiesPage /> },
+      { path: 'network/amenities/:id', element: <AmenityDetailsPage /> },
       { path: 'fleet/vehicles', element: <VehiclesListPage /> },
       { path: 'fleet/vehicles/new', element: <VehicleFormPage /> },
       { path: 'fleet/vehicles/:id', element: <FleetVehicleDetailsPage /> },
       { path: 'fleet/vehicles/:id/edit', element: <VehicleFormPage /> },
       { path: 'fleet/drivers', element: <DriversListPage /> },
+      { path: 'fleet/drivers/:id', element: <DriverDetailsPage /> },
       // Financial Modules - wallets, top-up review, commission settlements (live API)
       {
         path: 'financials/wallets',
@@ -151,10 +166,12 @@ export const router = createBrowserRouter([
         path: 'financials/settlements',
         element: <SettlementsPage />,
       },
+      { path: 'financials/settlements/:id', element: <SettlementDetailsPage /> },
       {
         path: 'financials/carrier-settlements',
         element: <CarrierSettlementsPage />,
       },
+      { path: 'financials/carrier-settlements/:id', element: <CarrierSettlementDetailsPage /> },
       {
         path: 'refunds/queue',
         element: <RefundsQueuePage />,
@@ -163,6 +180,7 @@ export const router = createBrowserRouter([
         path: 'refunds/policies',
         element: <CancellationPoliciesPage />,
       },
+      { path: 'refunds/:id', element: <RefundDetailsPage /> },
       {
         path: 'reports',
         element: <FinancialReportsPage />,
@@ -180,6 +198,7 @@ export const router = createBrowserRouter([
         path: 'admin/roles',
         element: <RolesPermissionsPage />,
       },
+      { path: 'admin/roles/:id', element: <RolesPermissionsPage /> },
       {
         path: 'admin/audit',
         element: <AuditTrailPage />,

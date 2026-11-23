@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
@@ -26,7 +26,6 @@ import {
   type SettlementStatus,
 } from '../api';
 import { CreateSettlementModal } from '../components/CreateSettlementModal';
-import { SettlementDrawer } from '../components/SettlementDrawer';
 import { formatPeriod } from '../period';
 
 const PAGE_SIZE = 20;
@@ -38,7 +37,8 @@ export const SettlementsPage: React.FC = () => {
   const [tab, setTab] = React.useState<Tab>('settlements');
   const [officeId, setOfficeId] = React.useState('');
   const [createOpen, setCreateOpen] = React.useState(false);
-  const [openId, setOpenId] = React.useState<string | null>(null);
+  const navigate = useNavigate();
+  const openSettlement = (id: string) => navigate(`/financials/settlements/${id}`);
   const offices = useOfficeLookup();
   const officeById = React.useMemo(() => new Map((offices.data ?? []).map((o) => [o.id, o])), [offices.data]);
 
@@ -75,9 +75,9 @@ export const SettlementsPage: React.FC = () => {
       </div>
 
       {tab === 'settlements' ? (
-        <SettlementsTab officeId={officeId} officeById={officeById} onOpen={setOpenId} />
+        <SettlementsTab officeId={officeId} officeById={officeById} onOpen={openSettlement} />
       ) : (
-        <AccrualsTab officeId={officeId} officeById={officeById} onOpenSettlement={setOpenId} />
+        <AccrualsTab officeId={officeId} officeById={officeById} onOpenSettlement={openSettlement} />
       )}
 
       {createOpen && (
@@ -85,12 +85,10 @@ export const SettlementsPage: React.FC = () => {
           onClose={() => setCreateOpen(false)}
           onCreated={(s) => {
             setCreateOpen(false);
-            setTab('settlements');
-            setOpenId(s.id);
+            openSettlement(s.id);
           }}
         />
       )}
-      {openId && <SettlementDrawer key={openId} id={openId} onClose={() => setOpenId(null)} />}
     </div>
   );
 };
@@ -134,9 +132,9 @@ const SettlementsTab: React.FC<TabProps & { onOpen: (id: string) => void }> = ({
             </thead>
             <tbody>
               {rows.map((s) => (
-                <tr key={s.id} className="border-t border-surface-container hover:bg-surface-container/50">
+                <tr key={s.id} onClick={() => onOpen(s.id)} className="border-t border-surface-container hover:bg-surface-container/50 cursor-pointer">
                   <td className="py-2 px-2">
-                    <Link to={`/brokers/${s.officeId}`} className="font-semibold text-secondary">{officeById.get(s.officeId)?.name ?? s.officeCode ?? s.officeId}</Link>
+                    <Link to={`/brokers/${s.officeId}`} onClick={(e) => e.stopPropagation()} className="font-semibold text-secondary">{officeById.get(s.officeId)?.name ?? s.officeCode ?? s.officeId}</Link>
                   </td>
                   <td className="py-2 px-2 tabular-nums whitespace-nowrap" dir="ltr">{formatPeriod(s.periodFrom, s.periodTo)}</td>
                   <td className="py-2 px-2 tabular-nums font-semibold">{formatSdg(s.totalAmountMinor)}</td>
@@ -145,7 +143,9 @@ const SettlementsTab: React.FC<TabProps & { onOpen: (id: string) => void }> = ({
                   <td className="py-2 px-2 font-mono text-xs" dir="ltr">{s.payoutReference ?? '—'}</td>
                   <td className="py-2 px-2 text-on-surface-variant">{formatDateTime(s.createdAt)}</td>
                   <td className="py-2 px-2 text-left">
-                    <Button size="sm" variant="ghost" onClick={() => onOpen(s.id)}>التفاصيل</Button>
+                    <Link to={`/financials/settlements/${s.id}`} onClick={(e) => e.stopPropagation()}>
+                      <Button size="sm" variant="outline" icon="visibility">عرض</Button>
+                    </Link>
                   </td>
                 </tr>
               ))}

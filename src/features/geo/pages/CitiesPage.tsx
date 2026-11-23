@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
 import { Badge } from '../../../components/ui/Badge';
 import { Button, IconButton } from '../../../components/ui/Button';
@@ -12,6 +12,7 @@ import { useAuth } from '../../auth/auth-context';
 import { useDebouncedValue } from '../../carriers/useDebouncedValue';
 import { useCities, useStations, useUpdateCity, type City } from '../api';
 import { CityModal } from '../components/CityModal';
+import { CityDeleteDialog } from '../components/GeoDeleteDialogs';
 import { ConfirmDialog, Pager, Panel, Select, TableShell, Td, Th } from '../components/common';
 import { usePageReset } from '../usePageReset';
 
@@ -48,6 +49,8 @@ export const CitiesPage: React.FC = () => {
   const [modal, setModal] = React.useState<{ city?: City } | null>(null);
   const [toggling, setToggling] = React.useState<City | null>(null);
   const update = useUpdateCity();
+  const navigate = useNavigate();
+  const [deleting, setDeleting] = React.useState<City | null>(null);
 
   const cities = useCities({ page, pageSize: PAGE_SIZE, q: q || undefined, isActive: active === '' ? undefined : active === 'true' });
   const rows = cities.data?.data ?? [];
@@ -102,7 +105,7 @@ export const CitiesPage: React.FC = () => {
                 <Th>الترتيب</Th>
                 <Th>الحالة</Th>
                 <Th>المحطات</Th>
-                {canManage && <Th className="text-left">إجراءات</Th>}
+                <Th className="text-left">إجراءات</Th>
               </>
             }
           >
@@ -110,8 +113,8 @@ export const CitiesPage: React.FC = () => {
               const open = expanded === c.id;
               return (
                 <React.Fragment key={c.id}>
-                  <tr className="border-t border-surface-container hover:bg-surface-container/50">
-                    <Td>
+                  <tr className="border-t border-surface-container hover:bg-surface-container/50 cursor-pointer" onClick={() => navigate(`/network/cities/${c.id}`)}>
+                    <Td onClick={(e) => e.stopPropagation()}>
                       <IconButton
                         size="sm"
                         variant="ghost"
@@ -132,22 +135,28 @@ export const CitiesPage: React.FC = () => {
                       <Badge variant={c.isActive ? 'success' : 'neutral'} dot>{c.isActive ? 'نشطة' : 'غير نشطة'}</Badge>
                     </Td>
                     <Td>
-                      <Link to={`/network/stations?cityId=${c.id}`} className="text-secondary font-medium tabular-nums">
+                      <Link to={`/network/stations?cityId=${c.id}`} className="text-secondary font-medium tabular-nums" onClick={(e) => e.stopPropagation()}>
                         {c.stationCount.toLocaleString('en-US')} محطة
                       </Link>
                     </Td>
-                    {canManage && (
-                      <Td className="text-left whitespace-nowrap">
-                        <Button size="sm" variant="ghost" icon="edit" onClick={() => setModal({ city: c })}>تعديل</Button>
-                        <Button size="sm" variant="ghost" icon={c.isActive ? 'toggle_off' : 'toggle_on'} onClick={() => setToggling(c)}>
-                          {c.isActive ? 'إلغاء التفعيل' : 'تفعيل'}
-                        </Button>
-                      </Td>
-                    )}
+                    <Td className="text-left whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <Link to={`/network/cities/${c.id}`}>
+                        <Button size="sm" variant="ghost" icon="visibility">عرض</Button>
+                      </Link>
+                      {canManage && (
+                        <>
+                          <Button size="sm" variant="ghost" icon="edit" onClick={() => setModal({ city: c })}>تعديل</Button>
+                          <Button size="sm" variant="ghost" icon={c.isActive ? 'toggle_off' : 'toggle_on'} onClick={() => setToggling(c)}>
+                            {c.isActive ? 'إلغاء التفعيل' : 'تفعيل'}
+                          </Button>
+                          <Button size="sm" variant="ghost" icon="delete" className="text-error" onClick={() => setDeleting(c)}>حذف</Button>
+                        </>
+                      )}
+                    </Td>
                   </tr>
                   {open && (
                     <tr className="bg-surface-container/30">
-                      <td colSpan={canManage ? 8 : 7} className="px-4 py-3">
+                      <td colSpan={8} className="px-4 py-3">
                         <CityStations city={c} />
                       </td>
                     </tr>
@@ -160,6 +169,7 @@ export const CitiesPage: React.FC = () => {
         <Pager meta={cities.data?.meta} busy={cities.isFetching} onPage={setPage} />
       </Panel>
 
+      <CityDeleteDialog record={deleting} onClose={() => setDeleting(null)} />
       <CityModal city={modal?.city} open={modal !== null} onOpenChange={(o) => !o && setModal(null)} />
       <ConfirmDialog
         open={toggling !== null}

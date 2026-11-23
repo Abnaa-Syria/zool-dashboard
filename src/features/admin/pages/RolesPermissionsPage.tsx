@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
@@ -6,24 +7,34 @@ import { EmptyState, ErrorState } from '../../../components/ui/EmptyState';
 import { Skeleton } from '../../../components/ui/Skeleton';
 import { formatDateTime } from '../../../lib/dates';
 import { useAuth } from '../../auth/auth-context';
-import { adminErrorMessage, useDeleteRole, usePermissionCatalog, useRoles, useSetRolePermissions, useUpdateRole, type Role } from '../api';
+import { adminErrorMessage, useAdmins, useDeleteRole, usePermissionCatalog, useRoles, useSetRolePermissions, useUpdateRole, type Role } from '../api';
 import { PERMISSION_LABEL } from '../labels';
-import { ConfirmDialog, InlineError, Section } from '../components/AdminUi';
+import { AdminStatusBadge, ConfirmDialog, InlineError, Section } from '../components/AdminUi';
 import { PermissionMatrix } from '../components/PermissionMatrix';
 import { RoleFormModal } from '../components/RoleFormModal';
 
 export const RolesPermissionsPage: React.FC = () => {
   const { can } = useAuth();
   const roles = useRoles();
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const { id: selectedId } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const setSelectedId = (id: string | null) => navigate(id ? `/admin/roles/${id}` : '/admin/roles');
   const [createOpen, setCreateOpen] = React.useState(false);
 
   const list = roles.data ?? [];
   const selected = list.find((r) => r.id === selectedId) ?? list[0];
+  const missing = Boolean(selectedId) && roles.isSuccess && !list.some((r) => r.id === selectedId);
 
   return (
     <div className="flex flex-col w-full pb-space-xl gap-space-lg">
-      <Breadcrumbs items={[{ label: 'إدارة النظام' }, { label: 'الأدوار والصلاحيات' }]} />
+      <Breadcrumbs
+        items={
+          selectedId && selected
+            ? [{ label: 'إدارة النظام' }, { label: 'الأدوار والصلاحيات', path: '/admin/roles' }, { label: selected.name }]
+            : [{ label: 'إدارة النظام' }, { label: 'الأدوار والصلاحيات' }]
+        }
+      />
+      {missing && <InlineError message="الدور المطلوب غير موجود (ربما حُذف). يُعرض أول دور بدلًا منه." />}
 
       <div className="flex flex-wrap items-center justify-between gap-space-sm">
         <div>
@@ -192,6 +203,8 @@ const RoleDetails: React.FC<{ role: Role; roles: Role[]; onDeleted: () => void }
         {dirty && role.memberCount > 0 && <p className="text-[11px] text-[#B45309]">سيؤثر الحفظ على {role.memberCount} مشرف فورًا.</p>}
       </Section>
 
+      <RoleMembers role={role} />
+
       {canUpdate && <RoleFormModal open={editOpen} onOpenChange={setEditOpen} role={role} roles={roles} onSaved={() => undefined} />}
 
       <ConfirmDialog
@@ -224,5 +237,38 @@ const RoleDetails: React.FC<{ role: Role; roles: Role[]; onDeleted: () => void }
         }
       />
     </div>
+  );
+};
+
+/** Admins holding this role. GET /admins has no role filter, so the first 100 admins are filtered here. */
+const RoleMembers: React.FC<{ role: Role }> = ({ role }) => {
+  const { can } = useAuth();
+  const admins = useAdmins({ page: 1, pageSize: 100 }, can('admins.view') && role.memberCount > 0);
+  if (!can('admins.view')) return null;
+  const members = (admins.data?.data ?? []).filter((a) => a.roles.some((r) => r.id === role.id));
+  const truncated = (admins.data?.meta?.total ?? 0) > 100;
+  return (
+    <Section title={`أعضاء الدور (${role.memberCount})`}>
+      {role.memberCount === 0 ? (
+        <p className="text-sm text-on-surface-variant">لا يوجد مشرفون بهذا الدور.</p>
+      ) : admins.isLoading ? (
+        <Skeleton className="h-16" />
+      ) : admins.isError ? (
+        <InlineError message={adminErrorMessage(admins.error)} />
+      ) : (
+        <ul className="divide-y divide-surface-container">
+          {members.map((a) => (
+            <li key={a.id} className="flex items-center justify-between gap-2 py-2 text-sm">
+              <Link to={`/admin/team/${a.id}`} className="font-semibold text-secondary">{a.displayName}</Link>
+              <span className="flex items-center gap-2">
+                <span className="font-mono text-xs text-on-surface-variant" dir="ltr">{a.employeeCode}</span>
+                <AdminStatusBadge status={a.status} />
+              </span>
+            </li>
+          ))}
+          {truncated && <li className="py-2 text-xs text-on-surface-variant">تُعرض الأعضاء من أول 100 مشرف فقط.</li>}
+        </ul>
+      )}
+    </Section>
   );
 };

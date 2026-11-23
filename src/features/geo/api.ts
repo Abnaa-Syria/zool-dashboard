@@ -71,6 +71,9 @@ export const geoKeys = {
   cities: (f: CityFilters) => [...geoKeys.all, 'cities', f] as const,
   stations: (f: StationFilters) => [...geoKeys.all, 'stations', f] as const,
   amenities: () => [...geoKeys.all, 'amenities'] as const,
+  city: (id: string) => [...geoKeys.all, 'city', id] as const,
+  station: (id: string) => [...geoKeys.all, 'station', id] as const,
+  amenity: (id: string) => [...geoKeys.all, 'amenity', id] as const,
 };
 
 export function useCities(filters: CityFilters) {
@@ -102,6 +105,30 @@ export function useAmenities() {
   });
 }
 
+export function useCity(id: string | undefined) {
+  return useQuery({
+    queryKey: geoKeys.city(id ?? ''),
+    queryFn: ({ signal }) => api.get<City>(`/admin/cities/${id}`, undefined, signal).then((r) => r.data),
+    enabled: Boolean(id),
+  });
+}
+
+export function useStation(id: string | undefined) {
+  return useQuery({
+    queryKey: geoKeys.station(id ?? ''),
+    queryFn: ({ signal }) => api.get<Station>(`/admin/stations/${id}`, undefined, signal).then((r) => r.data),
+    enabled: Boolean(id),
+  });
+}
+
+export function useAmenity(id: string | undefined) {
+  return useQuery({
+    queryKey: geoKeys.amenity(id ?? ''),
+    queryFn: ({ signal }) => api.get<Amenity>(`/admin/amenities/${id}`, undefined, signal).then((r) => r.data),
+    enabled: Boolean(id),
+  });
+}
+
 /** Any geo write can change counts or names shown on other geo lists (and vehicle amenity names). */
 function useGeoMutation<TVars, TData>(fn: (vars: TVars) => Promise<TData>) {
   const qc = useQueryClient();
@@ -124,3 +151,24 @@ export const useCreateAmenity = () =>
   useGeoMutation((input: CreateAmenityInput) => api.post<Amenity>('/admin/amenities', input).then((r) => r.data));
 export const useUpdateAmenity = () =>
   useGeoMutation((v: { id: string; patch: AmenityPatch }) => api.patch<Amenity>(`/admin/amenities/${v.id}`, v.patch).then((r) => r.data));
+
+/**
+ * Hard deletes (geo.manage). 409 ENTITY_IN_USE when something still uses the record; the caller
+ * (DeleteEntityDialog) then offers deactivation instead.
+ */
+function useGeoDelete(kind: 'cities' | 'stations' | 'amenities') {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<{ deleted: boolean }>(`/admin/${kind}/${id}`).then((r) => r.data),
+    // Refresh lists but not the deleted record's own detail (it would 404 while the page navigates away).
+    onSuccess: (_d, id) =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: geoKeys.all, predicate: (q) => q.queryKey[2] !== id }),
+        qc.invalidateQueries({ queryKey: ['fleet'] }),
+      ]),
+  });
+}
+
+export const useDeleteCity = () => useGeoDelete('cities');
+export const useDeleteStation = () => useGeoDelete('stations');
+export const useDeleteAmenity = () => useGeoDelete('amenities');

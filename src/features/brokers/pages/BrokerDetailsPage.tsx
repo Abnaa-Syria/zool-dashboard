@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
+import { DeleteEntityDialog } from '../../../components/shared/DeleteEntityDialog';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { ErrorState } from '../../../components/ui/EmptyState';
@@ -9,9 +10,13 @@ import { Skeleton } from '../../../components/ui/Skeleton';
 import { errorMessage } from '../../../lib/api/errors';
 import { formatDateTime } from '../../../lib/dates';
 import { formatSdg } from '../../../lib/money';
+import { Section } from '../../admin/components/AdminUi';
 import { useAuth } from '../../auth/auth-context';
-import { OFFICE_STATUS_LABEL, SETTLEMENT_PERIOD_LABEL, useBrokerOffice } from '../api';
+import { RelatedBookingsTable } from '../../bookings/components/RelatedBookingsTable';
+import { OFFICE_STATUS_LABEL, SETTLEMENT_PERIOD_LABEL, useBrokerOffice, useDeleteOffice, useUpdateOfficeStatus } from '../api';
 import { AssignmentsSection } from '../components/AssignmentsSection';
+import { EditOfficeModal } from '../components/EditOfficeModal';
+import { OfficeSettlementsSection } from '../components/OfficeSettlementsSection';
 import { OfficeStatusModal } from '../components/OfficeStatusModal';
 import { StaffSection } from '../components/StaffSection';
 import { WalletSection } from '../components/WalletSection';
@@ -28,6 +33,11 @@ export const BrokerDetailsPage: React.FC = () => {
   const { can } = useAuth();
   const office = useBrokerOffice(id);
   const [statusOpen, setStatusOpen] = React.useState(false);
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const navigate = useNavigate();
+  const remove = useDeleteOffice();
+  const setStatus = useUpdateOfficeStatus(id ?? '');
   const o = office.data;
 
   return (
@@ -52,11 +62,15 @@ export const BrokerDetailsPage: React.FC = () => {
             badge={<Badge variant={o.status === 'ACTIVE' ? 'success' : 'error'} dot>{OFFICE_STATUS_LABEL[o.status]}</Badge>}
             actions={
               can('brokers.manage') ? (
-                o.status === 'ACTIVE' ? (
-                  <Button variant="danger" icon="block" onClick={() => setStatusOpen(true)}>إيقاف المكتب</Button>
-                ) : (
-                  <Button icon="check_circle" onClick={() => setStatusOpen(true)}>إعادة التفعيل</Button>
-                )
+                <>
+                  <Button variant="outline" icon="edit" onClick={() => setEditOpen(true)}>تعديل السياسة</Button>
+                  {o.status === 'ACTIVE' ? (
+                    <Button variant="danger" icon="block" onClick={() => setStatusOpen(true)}>إيقاف المكتب</Button>
+                  ) : (
+                    <Button icon="check_circle" onClick={() => setStatusOpen(true)}>إعادة التفعيل</Button>
+                  )}
+                  <Button variant="outline" icon="delete" className="text-error" onClick={() => setDeleteOpen(true)}>حذف</Button>
+                </>
               ) : null
             }
           />
@@ -86,7 +100,33 @@ export const BrokerDetailsPage: React.FC = () => {
             </div>
           </div>
 
+          {can('bookings.view') && (
+            <Section title="حجوزات المكتب">
+              <RelatedBookingsTable scope={{ officeId: o.id }} hide={['office']} emptyText="لم يُصدر هذا المكتب حجوزات بعد." />
+            </Section>
+          )}
+          {can('commissions.view') && <OfficeSettlementsSection officeId={o.id} />}
+
           {statusOpen && <OfficeStatusModal office={o} onClose={() => setStatusOpen(false)} />}
+          {editOpen && <EditOfficeModal office={o} onClose={() => setEditOpen(false)} />}
+          <DeleteEntityDialog
+            open={deleteOpen}
+            onOpenChange={setDeleteOpen}
+            entityLabel="مكتب الوكيل"
+            name={o.name}
+            description={<p>يُحذف المكتب مع محفظته وموظفيه وإسناداته. لا يُسمح بالحذف إذا كانت له حجوزات أو حركات محفظة أو طلبات شحن أو عمولات أو رصيد متبقٍ.</p>}
+            onDelete={() => remove.mutateAsync(o.id)}
+            onDeleted={() => navigate('/brokers', { replace: true })}
+            alternative={
+              o.status === 'ACTIVE'
+                ? {
+                    label: 'إيقاف المكتب',
+                    description: 'إيقاف المكتب يمنع موظفيه من الدخول والحجز مع الإبقاء على المحفظة والسجل المالي كاملًا.',
+                    run: () => setStatus.mutateAsync('SUSPENDED'),
+                  }
+                : undefined
+            }
+          />
         </>
       ) : null}
     </div>

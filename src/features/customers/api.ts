@@ -59,6 +59,18 @@ export function useUpdateCustomer(id: string) {
   });
 }
 
+/**
+ * DELETE /admin/customers/:id — anonymises personal data (name, phone, email), revokes sessions and marks the
+ * account DELETED; bookings and tickets stay for accounting. 409 ACCOUNT_HAS_ACTIVE_BOOKINGS while a trip is ahead.
+ */
+export function useDeleteCustomer(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.delete<{ deleted: boolean }>(`/admin/customers/${id}`).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: customerKeys.all }),
+  });
+}
+
 export const CUSTOMER_STATUS_LABEL: Record<CustomerStatus, string> = {
   ACTIVE: 'نشط',
   SUSPENDED: 'موقوف',

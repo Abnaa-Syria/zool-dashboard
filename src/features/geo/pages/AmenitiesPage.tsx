@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
 import { Button } from '../../../components/ui/Button';
 import { EmptyState, ErrorState } from '../../../components/ui/EmptyState';
@@ -9,6 +10,7 @@ import { useAuth } from '../../auth/auth-context';
 import { useAmenities, type Amenity } from '../api';
 import { AmenityModal } from '../components/AmenityModal';
 import { Icon, Panel, TableShell, Td, Th } from '../components/common';
+import { AmenityDeleteDialog } from '../components/GeoDeleteDialogs';
 
 export const AmenitiesPage: React.FC = () => {
   const { can } = useAuth();
@@ -16,6 +18,8 @@ export const AmenitiesPage: React.FC = () => {
   const amenities = useAmenities();
   const [modal, setModal] = React.useState<{ amenity?: Amenity } | null>(null);
   const rows = amenities.data ?? [];
+  const navigate = useNavigate();
+  const [deleting, setDeleting] = React.useState<Amenity | null>(null);
 
   return (
     <div className="flex flex-col w-full pb-space-xl gap-space-md">
@@ -42,12 +46,12 @@ export const AmenitiesPage: React.FC = () => {
                 <Th>الرمز</Th>
                 <Th>الاسم</Th>
                 <Th>الترتيب</Th>
-                {canManage && <Th className="text-left">إجراءات</Th>}
+                <Th className="text-left">إجراءات</Th>
               </>
             }
           >
             {rows.map((a) => (
-              <tr key={a.id} className="border-t border-surface-container hover:bg-surface-container/50">
+              <tr key={a.id} className="border-t border-surface-container hover:bg-surface-container/50 cursor-pointer" onClick={() => navigate(`/network/amenities/${a.id}`)}>
                 <Td>
                   <div className="w-9 h-9 rounded-lg bg-surface-container flex items-center justify-center text-secondary" title={a.icon}>
                     <Icon name={a.icon} className="text-[20px]" />
@@ -59,18 +63,25 @@ export const AmenitiesPage: React.FC = () => {
                   <div className="text-xs text-on-surface-variant" dir="ltr">{a.nameEn}</div>
                 </Td>
                 <Td className="tabular-nums">{a.sortOrder}</Td>
-                {canManage && (
-                  <Td className="text-left">
-                    <Button size="sm" variant="ghost" icon="edit" onClick={() => setModal({ amenity: a })}>تعديل</Button>
-                  </Td>
-                )}
+                <Td className="text-left whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                  <Link to={`/network/amenities/${a.id}`}>
+                    <Button size="sm" variant="ghost" icon="visibility">عرض</Button>
+                  </Link>
+                  {canManage && (
+                    <>
+                      <Button size="sm" variant="ghost" icon="edit" onClick={() => setModal({ amenity: a })}>تعديل</Button>
+                      <Button size="sm" variant="ghost" icon="delete" className="text-error" onClick={() => setDeleting(a)}>حذف</Button>
+                    </>
+                  )}
+                </Td>
               </tr>
             ))}
           </TableShell>
         )}
-        <p className="text-xs text-on-surface-variant mt-space-sm">لا يوجد حذف للمزايا عبر الواجهة البرمجية حاليًا؛ عدّل الاسم أو الأيقونة عند الحاجة.</p>
+        <p className="text-xs text-on-surface-variant mt-space-sm">يُسمح بحذف الميزة فقط إذا لم تكن مُسندة إلى أي حافلة.</p>
       </Panel>
 
+      <AmenityDeleteDialog record={deleting} onClose={() => setDeleting(null)} />
       <AmenityModal amenity={modal?.amenity} open={modal !== null} onOpenChange={(o) => !o && setModal(null)} />
     </div>
   );

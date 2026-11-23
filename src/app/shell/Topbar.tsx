@@ -25,6 +25,9 @@ export const Topbar: React.FC<TopbarProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = React.useState('');
   const { admin, logout } = useAuth();
+  const [today] = React.useState(() =>
+    new Intl.DateTimeFormat('ar-SD', { timeZone: 'Africa/Khartoum', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date()),
+  );
   const initials = (admin?.displayName ?? '?')
     .split(/\s+/)
     .slice(0, 2)
@@ -87,7 +90,7 @@ export const Topbar: React.FC<TopbarProps> = ({
         {/* Date Badge */}
         <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container-lowest text-on-surface text-xs font-semibold shadow-xs border border-outline-variant/30">
           <span className="material-symbols-outlined text-secondary text-[16px]">calendar_today</span>
-          <span>اليوم: 24 أكتوبر 2024</span>
+          <span>اليوم: {today}</span>
         </div>
 
         {/* Notifications Dropdown */}

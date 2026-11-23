@@ -229,6 +229,26 @@ export function useActiveRoutes(enabled = true) {
   });
 }
 
+export function useRoute(id: string | undefined) {
+  return useQuery({
+    queryKey: networkKeys.route(id ?? ''),
+    queryFn: ({ signal }) => api.get<RouteDto>(`/admin/routes/${id}`, undefined, signal).then((r) => r.data),
+    enabled: Boolean(id),
+  });
+}
+
+/** DELETE /admin/routes/:id — 409 ENTITY_IN_USE once trips were scheduled on it (deactivate instead). */
+export function useDeleteRoute() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<{ deleted: boolean }>(`/admin/routes/${id}`).then((r) => r.data),
+    onSuccess: (_d, id) => {
+      qc.removeQueries({ queryKey: networkKeys.route(id) });
+      return qc.invalidateQueries({ queryKey: networkKeys.all });
+    },
+  });
+}
+
 export function useCreateRoute() {
   const qc = useQueryClient();
   return useMutation({
@@ -339,3 +359,8 @@ export function stationLabel(s: StationLite | null | undefined): string {
 }
 
 
+
+/** Short route name: its code, else "origin city ← destination city". */
+export function routeLabel(r: Pick<RouteDto, 'code' | 'originStation' | 'destinationStation'>): string {
+  return r.code || `${r.originStation.city.nameAr} ← ${r.destinationStation.city.nameAr}`;
+}

@@ -65,3 +65,15 @@ export function validateContent(input: ContentInput): string | null {
   }
   return null;
 }
+
+/** DELETE /admin/content/:slug — unpublishes and removes the page (the apps get 404 for it afterwards). */
+export function useDeleteContent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (slug: string) => api.delete<{ deleted: boolean }>(`/admin/content/${slug}`).then((r) => r.data),
+    onSuccess: (_d, slug) => {
+      qc.setQueryData<ContentPage[]>(contentKeys.all, (prev) => (prev ? prev.filter((p) => p.slug !== slug) : prev));
+      return qc.invalidateQueries({ queryKey: contentKeys.all });
+    },
+  });
+}

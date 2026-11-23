@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
 import { Badge } from '../../../components/ui/Badge';
 import { EmptyState, ErrorState } from '../../../components/ui/EmptyState';
@@ -15,6 +15,7 @@ import { CUSTOMER_STATUS_LABEL, CUSTOMER_STATUS_VARIANT, useCustomers, type Cust
 const PAGE_SIZE = 20;
 
 export const CustomersListPage: React.FC = () => {
+  const navigate = useNavigate();
   const [search, setSearch] = React.useState('');
   const q = useDebouncedValue(search.trim(), 300);
   const [status, setStatus] = React.useState<CustomerStatus | ''>('');
@@ -84,13 +85,18 @@ export const CustomersListPage: React.FC = () => {
                   <th className="py-2 px-2 font-medium">عدم حضور نقدي</th>
                   <th className="py-2 px-2 font-medium">آخر دخول</th>
                   <th className="py-2 px-2 font-medium">تاريخ التسجيل</th>
+                  <th className="py-2 px-2 font-medium" />
                 </tr>
               </thead>
               <tbody>
                 {rows.map((c) => (
-                  <tr key={c.id} className="border-t border-surface-container hover:bg-surface-container/50">
+                  <tr
+                    key={c.id}
+                    className="border-t border-surface-container hover:bg-surface-container/50 cursor-pointer"
+                    onClick={() => navigate(`/travelers/${c.id}`)}
+                  >
                     <td className="py-2 px-2">
-                      <Link to={`/travelers/${c.id}`} className="font-semibold text-secondary">{c.displayName ?? 'بدون اسم'}</Link>
+                      <Link to={`/travelers/${c.id}`} className="font-semibold text-secondary" onClick={(e) => e.stopPropagation()}>{c.displayName ?? 'بدون اسم'}</Link>
                     </td>
                     <td className="py-2 px-2 font-mono text-xs" dir="ltr">{c.phone ?? '—'}</td>
                     <td className="py-2 px-2 text-xs" dir="ltr">{c.email ?? '—'}</td>
@@ -103,6 +109,12 @@ export const CustomersListPage: React.FC = () => {
                     </td>
                     <td className="py-2 px-2 text-on-surface-variant">{formatDateTime(c.lastLoginAt)}</td>
                     <td className="py-2 px-2 text-on-surface-variant">{formatDateTime(c.createdAt)}</td>
+                    <td className="py-2 px-2">
+                      <Link to={`/travelers/${c.id}`} className="inline-flex items-center gap-1 text-xs text-secondary font-medium" onClick={(e) => e.stopPropagation()}>
+                        <span className="material-symbols-outlined text-[16px]">visibility</span>
+                        عرض
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>

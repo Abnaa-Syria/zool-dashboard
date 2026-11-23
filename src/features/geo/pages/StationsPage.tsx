@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
@@ -12,6 +12,7 @@ import { useAuth } from '../../auth/auth-context';
 import { useDebouncedValue } from '../../carriers/useDebouncedValue';
 import { useAllCities, useStations, useUpdateStation, type Station } from '../api';
 import { ConfirmDialog, Pager, Panel, Select, TableShell, Td, Th } from '../components/common';
+import { StationDeleteDialog } from '../components/GeoDeleteDialogs';
 import { StationModal } from '../components/StationModal';
 import { usePageReset } from '../usePageReset';
 
@@ -29,6 +30,8 @@ export const StationsPage: React.FC = () => {
   const [modal, setModal] = React.useState<{ station?: Station } | null>(null);
   const [toggling, setToggling] = React.useState<Station | null>(null);
   const update = useUpdateStation();
+  const navigate = useNavigate();
+  const [deleting, setDeleting] = React.useState<Station | null>(null);
 
   const cities = useAllCities();
   const stations = useStations({
@@ -96,12 +99,12 @@ export const StationsPage: React.FC = () => {
                 <Th>العنوان</Th>
                 <Th>الموقع</Th>
                 <Th>الحالة</Th>
-                {canManage && <Th className="text-left">إجراءات</Th>}
+                <Th className="text-left">إجراءات</Th>
               </>
             }
           >
             {rows.map((s) => (
-              <tr key={s.id} className="border-t border-surface-container hover:bg-surface-container/50">
+              <tr key={s.id} className="border-t border-surface-container hover:bg-surface-container/50 cursor-pointer" onClick={() => navigate(`/network/stations/${s.id}`)}>
                 <Td>
                   <div className="font-semibold">{s.nameAr}</div>
                   <div className="text-xs text-on-surface-variant" dir="ltr">{s.nameEn}</div>
@@ -118,6 +121,7 @@ export const StationsPage: React.FC = () => {
                       rel="noreferrer"
                       className="text-secondary font-mono"
                       dir="ltr"
+                      onClick={(e) => e.stopPropagation()}
                     >
                       {s.latitude.toFixed(4)}, {s.longitude.toFixed(4)}
                     </a>
@@ -128,14 +132,20 @@ export const StationsPage: React.FC = () => {
                 <Td>
                   <Badge variant={s.isActive ? 'success' : 'neutral'} dot>{s.isActive ? 'نشطة' : 'غير نشطة'}</Badge>
                 </Td>
-                {canManage && (
-                  <Td className="text-left whitespace-nowrap">
-                    <Button size="sm" variant="ghost" icon="edit" onClick={() => setModal({ station: s })}>تعديل</Button>
-                    <Button size="sm" variant="ghost" icon={s.isActive ? 'toggle_off' : 'toggle_on'} onClick={() => setToggling(s)}>
-                      {s.isActive ? 'إلغاء التفعيل' : 'تفعيل'}
-                    </Button>
-                  </Td>
-                )}
+                <Td className="text-left whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                  <Link to={`/network/stations/${s.id}`}>
+                    <Button size="sm" variant="ghost" icon="visibility">عرض</Button>
+                  </Link>
+                  {canManage && (
+                    <>
+                      <Button size="sm" variant="ghost" icon="edit" onClick={() => setModal({ station: s })}>تعديل</Button>
+                      <Button size="sm" variant="ghost" icon={s.isActive ? 'toggle_off' : 'toggle_on'} onClick={() => setToggling(s)}>
+                        {s.isActive ? 'إلغاء التفعيل' : 'تفعيل'}
+                      </Button>
+                      <Button size="sm" variant="ghost" icon="delete" className="text-error" onClick={() => setDeleting(s)}>حذف</Button>
+                    </>
+                  )}
+                </Td>
               </tr>
             ))}
           </TableShell>
@@ -143,6 +153,7 @@ export const StationsPage: React.FC = () => {
         <Pager meta={stations.data?.meta} busy={stations.isFetching} onPage={setPage} />
       </Panel>
 
+      <StationDeleteDialog record={deleting} onClose={() => setDeleting(null)} />
       <StationModal station={modal?.station} defaultCityId={cityId || undefined} open={modal !== null} onOpenChange={(o) => !o && setModal(null)} />
       <ConfirmDialog
         open={toggling !== null}

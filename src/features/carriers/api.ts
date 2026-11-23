@@ -190,3 +190,21 @@ export const CARRIER_STATUS_LABEL: Record<CarrierStatus, string> = {
   ACTIVE: 'نشطة',
   SUSPENDED: 'موقوفة',
 };
+
+/** DELETE /carriers/:companyId — only while nothing depends on it (409 ENTITY_IN_USE otherwise). */
+export function useDeleteCarrier() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<{ deleted: boolean }>(`/carriers/${id}`).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [...carrierKeys.all, 'list'] }),
+  });
+}
+
+/** DELETE /carriers/:companyId/staff/:employeeId — refused for the last active manager. */
+export function useDeleteCarrierStaff(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (employeeId: string) => api.delete<{ deleted: boolean }>(`/carriers/${id}/staff/${employeeId}`).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: carrierKeys.staff(id) }),
+  });
+}

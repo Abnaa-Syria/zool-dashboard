@@ -34,7 +34,9 @@ const MESSAGES: Record<string, string> = {
   EXPOSURE_CEILING_EXCEEDED: 'تم تجاوز سقف المديونية المسموح للمكتب.',
   CARRIER_NOT_ASSIGNED: 'شركة النقل غير مُسندة لهذا المكتب.',
   SEAT_UNAVAILABLE: 'مقعد أو أكثر لم يعد متاحًا.',
-  AUTH_AUTHZ_STALE: 'تغيّرت صلاحياتك. حدّث الصفحة أو سجّل الدخول مرة أخرى.',
+  ENTITY_IN_USE: 'لا يمكن حذف هذا السجل لأنه مرتبط ببيانات أخرى. استخدم البديل الآمن (إلغاء التفعيل أو الإيقاف).',
+  ACCOUNT_HAS_ACTIVE_BOOKINGS: 'لا يمكن حذف الحساب لوجود حجوزات على رحلات قادمة. ألغِ هذه الحجوزات أولًا.',
+  AUTH_AUTHZ_STALE:'تغيّرت صلاحياتك. حدّث الصفحة أو سجّل الدخول مرة أخرى.',
 };
 
 export function errorMessage(error: unknown, fallback = 'حدث خطأ غير متوقع.'): string {

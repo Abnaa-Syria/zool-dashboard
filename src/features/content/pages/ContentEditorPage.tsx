@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
 import { Badge } from '../../../components/ui/Badge';
 import { Button, IconButton } from '../../../components/ui/Button';
@@ -7,9 +7,12 @@ import { ErrorState } from '../../../components/ui/EmptyState';
 import { Input } from '../../../components/ui/Input';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { Skeleton } from '../../../components/ui/Skeleton';
+import { DeleteEntityDialog } from '../../../components/shared/DeleteEntityDialog';
 import { errorMessage } from '../../../lib/api/errors';
+import { useAuth } from '../../auth/auth-context';
 import { formatDateTime } from '../../../lib/dates';
-import { KNOWN_PAGES, SLUG_RE, usePublishContent, useContentPages, validateContent, type ContentPage, type ContentSection } from '../api';
+import { KNOWN_PAGES, SLUG_RE, useDeleteContent, usePublishContent, useContentPages, validateContent, type ContentPage, type ContentSection } from '../api';
+import { ContentDeleteNote } from '../components/ContentDeleteNote';
 
 type DraftSection = ContentSection & { key: number };
 
@@ -32,6 +35,11 @@ const TextArea: React.FC<{ label: string; value: string; onChange: (v: string) =
 /** Form state is seeded once from the published page (component is keyed by slug + updatedAt). */
 const Editor: React.FC<{ slug: string; page: ContentPage | undefined; defaultTitle?: string }> = ({ slug, page, defaultTitle }) => {
   const publish = usePublishContent(slug);
+  const navigate = useNavigate();
+  const { can } = useAuth();
+  const canManage = can('content.manage');
+  const deletePage = useDeleteContent();
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [titleAr, setTitleAr] = React.useState(page?.titleAr ?? defaultTitle ?? '');
   const [titleEn, setTitleEn] = React.useState(page?.titleEn ?? '');
   const [sections, setSections] = React.useState<DraftSection[]>(() =>
@@ -65,11 +73,29 @@ const Editor: React.FC<{ slug: string; page: ContentPage | undefined; defaultTit
         className="mb-0"
         badge={dirty && page ? <Badge variant="warning" dot>تغييرات غير منشورة</Badge> : undefined}
         actions={
-          <Button icon="publish" disabled={Boolean(error) || !dirty} isLoading={publish.isPending} onClick={() => publish.mutate(draft)}>
-            نشر
-          </Button>
+          <div className="flex gap-2">
+            {canManage && page && (
+              <Button variant="outline" icon="delete" className="text-error" onClick={() => setDeleteOpen(true)}>
+                حذف الصفحة
+              </Button>
+            )}
+            <Button icon="publish" disabled={Boolean(error) || !dirty} isLoading={publish.isPending} onClick={() => publish.mutate(draft)}>
+              نشر
+            </Button>
+          </div>
         }
       />
+      {page && (
+        <DeleteEntityDialog
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          entityLabel="الصفحة"
+          name={page.titleAr}
+          description={<ContentDeleteNote slug={slug} />}
+          onDelete={() => deletePage.mutateAsync(slug)}
+          onDeleted={() => navigate('/content')}
+        />
+      )}
       {error && dirty && <p className="text-xs text-on-surface-variant">لا يمكن النشر بعد: {error}</p>}
       {publish.isError && <p className="text-xs text-error">{errorMessage(publish.error)}</p>}
 

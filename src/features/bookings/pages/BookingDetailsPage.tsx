@@ -11,9 +11,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { errorMessage } from '../../../lib/api/errors';
 import { formatDateTime } from '../../../lib/dates';
 import { formatSdg } from '../../../lib/money';
+import { NotDeletableNote } from '../../../components/shared/DetailFields';
 import { useAuth } from '../../auth/auth-context';
+import { REFUND_REASON_LABEL, REFUND_STATUS_LABEL, REFUND_STATUS_VARIANT } from '../../refunds/api';
 import {
+  BOARDING_STATUS_LABEL,
   BOOKING_STATUS_LABEL,
+  CHANNEL_LABEL,
+  GENDER_LABEL,
+  LEG_LABEL,
+  findOtherLeg,
+  useAdminBookings,
   COMMISSION_STATUS_LABEL,
   PAYMENT_METHOD_LABEL,
   PAYMENT_STATUS_LABEL,
@@ -44,6 +52,91 @@ const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, 
   </div>
 );
 
+const linkCls = 'text-secondary font-medium hover:underline';
+
+/** Trip change chain and round-trip legs (D-CHG-01). */
+const ChangesSection: React.FC<{ booking: AdminBooking }> = ({ booking: b }) => {
+  // No groupId filter in the admin API: look for the other leg among the same customer's / office's latest bookings.
+  const scope = b.customerId ? { customerId: b.customerId } : b.officeId ? { officeId: b.officeId } : null;
+  const enabled = Boolean(b.groupId && scope);
+  const siblings = useAdminBookings({ ...(scope ?? {}), page: 1, pageSize: 100 }, enabled);
+  const other = enabled ? findOtherLeg(b, siblings.data?.data ?? []) : null;
+  const hasAny = b.replacesBookingId || b.replacedByBookingId || (b.changeCount ?? 0) > 0 || b.groupId;
+  if (!hasAny) return null;
+  return (
+    <Section title="التعديلات والرحلة المرتبطة" icon="swap_horiz">
+      <dl>
+        <Field label="عدد مرات تعديل الرحلة">{(b.changeCount ?? 0).toLocaleString('en-US')}</Field>
+        {b.replacesBookingId && (
+          <Field label="أُنشئ بدلًا من الحجز">
+            <Link to={`/bookings/${b.replacesBookingId}`} className={linkCls}>عرض الحجز الأصلي</Link>
+          </Field>
+        )}
+        {b.replacedByBookingId && (
+          <Field label="استُبدل بالحجز">
+            <Link to={`/bookings/${b.replacedByBookingId}`} className={linkCls}>عرض الحجز الجديد</Link>
+          </Field>
+        )}
+        {b.groupId && (
+          <>
+            <Field label="ذهاب وعودة">{b.leg ? LEG_LABEL[b.leg] ?? b.leg : '—'}</Field>
+            <Field label={b.leg === 'RETURN' ? 'رحلة الذهاب' : 'رحلة العودة'}>
+              {other ? (
+                <Link to={`/bookings/${other.id}`} className={linkCls}>
+                  {bookingRefLabel(other)} · {other.trip.origin} ← {other.trip.destination}
+                </Link>
+              ) : siblings.isLoading && enabled ? (
+                '...'
+              ) : (
+                <span className="text-on-surface-variant text-xs">غير موجودة ضمن آخر 100 حجز للحساب</span>
+              )}
+            </Field>
+            <Field label="معرّف المجموعة"><span className="font-mono text-xs" dir="ltr">{b.groupId}</span></Field>
+          </>
+        )}
+      </dl>
+    </Section>
+  );
+};
+
+/** Refunds to the original payment method for this booking (embedded in the booking DTO). */
+const RefundsSection: React.FC<{ booking: AdminBooking }> = ({ booking: b }) => {
+  const rows = b.refunds ?? [];
+  if (b.channel !== 'DIRECT' && rows.length === 0) return null;
+  return (
+    <Section title="المبالغ المستردة" icon="currency_exchange">
+      {rows.length === 0 ? (
+        <p className="text-sm text-on-surface-variant">لا توجد عمليات استرداد لهذا الحجز.</p>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>المبلغ</TableHead>
+              <TableHead>السبب</TableHead>
+              <TableHead>الحالة</TableHead>
+              <TableHead>أُنشئ</TableHead>
+              <TableHead>نُفّذ</TableHead>
+              <TableHead />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((r) => (
+              <TableRow key={r.id}>
+                <TableCell className="tabular-nums">{formatSdg(r.amountMinor)}</TableCell>
+                <TableCell>{REFUND_REASON_LABEL[r.reason] ?? r.reason}</TableCell>
+                <TableCell><Badge variant={REFUND_STATUS_VARIANT[r.status]}>{REFUND_STATUS_LABEL[r.status]}</Badge></TableCell>
+                <TableCell>{formatDateTime(r.createdAt)}</TableCell>
+                <TableCell>{formatDateTime(r.processedAt)}</TableCell>
+                <TableCell><Link to={`/refunds/${r.id}`} className={linkCls}>عرض</Link></TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </Section>
+  );
+};
+
 const CancelBookingModal: React.FC<{ booking: AdminBooking; open: boolean; onOpenChange: (open: boolean) => void }> = ({ booking, open, onOpenChange }) => {
   const cancel = useCancelAdminBooking();
   const [reason, setReason] = React.useState('');
@@ -65,15 +158,17 @@ const CancelBookingModal: React.FC<{ booking: AdminBooking; open: boolean; onOpe
         <ModalHeader>
           <ModalTitle>إلغاء الحجز {bookingRefLabel(booking)}</ModalTitle>
           <ModalDescription>
-            يُلغى الحجز وتُحرَّر المقاعد، ويُعاد كامل المبلغ ({formatSdg(booking.totalAmountMinor)}) إلى محفظة المكتب، وتُسترد العمولة المستحقة.
+            {booking.channel === 'BROKER'
+              ? <>يُلغى الحجز وتُحرَّر المقاعد، ويُعاد كامل المبلغ ({formatSdg(booking.totalAmountMinor)}) إلى محفظة المكتب، وتُسترد العمولة المستحقة.</>
+              : <>يُلغى الحجز وتُحرَّر المقاعد. إن كان مدفوعًا إلكترونيًا يُسترد كامل المبلغ ({formatSdg(booking.totalAmountMinor)}) إلى وسيلة الدفع الأصلية بلا رسوم؛ والنقدي غير المدفوع لا يحتاج استردادًا.</>}
           </ModalDescription>
         </ModalHeader>
 
         {result ? (
           <dl className="rounded-lg bg-surface-container-low p-space-sm">
-            <Field label="المبلغ المُعاد للمحفظة">{formatSdg(result.refundedAmountMinor)}</Field>
-            <Field label="العمولة المستردة">{formatSdg(result.commissionClawedBackMinor)}</Field>
-            <Field label="رصيد المحفظة بعد الإلغاء">{formatSdg(result.balanceAfterMinor)}</Field>
+            <Field label={booking.channel === 'BROKER' ? 'المبلغ المُعاد للمحفظة' : 'المبلغ المسترد للعميل'}>{formatSdg(result.refundedAmountMinor)}</Field>
+            {booking.channel === 'BROKER' && <Field label="العمولة المستردة">{formatSdg(result.commissionClawedBackMinor)}</Field>}
+            {result.balanceAfterMinor !== null && <Field label="رصيد المحفظة بعد الإلغاء">{formatSdg(result.balanceAfterMinor)}</Field>}
             {result.replayed && <p className="text-xs text-on-surface-variant pt-2">كان الحجز ملغى مسبقًا؛ هذه نتيجة الإلغاء السابق.</p>}
           </dl>
         ) : (
@@ -184,9 +279,10 @@ export const BookingDetailsPage: React.FC = () => {
     );
   }
 
-  // Admin cancel refunds the office wallet, so the backend only supports it for broker bookings.
-  const cancelAllowed = can('bookings.cancel') && b.channel === 'BROKER';
-  const canCancel = cancelAllowed && b.status === 'CONFIRMED';
+  // Broker bookings are refunded to the office wallet; app bookings to the original payment method
+  // (no fee for admin cancellations). Unpaid online checkouts are voided.
+  const cancelAllowed = can('bookings.cancel');
+  const canCancel = cancelAllowed && (b.status === 'CONFIRMED' || b.status === 'PENDING_PAYMENT');
   const passengerTickets = b.passengers.map((p) => ({ passenger: p, tickets: b.tickets.filter((t) => t.passengerId === p.id) }));
 
   return (
@@ -209,8 +305,12 @@ export const BookingDetailsPage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-space-md">
         <Section title="ملخص الرحلة" icon="directions_bus">
           <dl>
-            <Field label="المسار">{b.trip.origin} ← {b.trip.destination}</Field>
-            <Field label="شركة النقل">{b.trip.company.name}</Field>
+            <Field label="المسار">
+              <Link to={`/network/trips/${b.trip.id}`} className={linkCls}>{b.trip.origin} ← {b.trip.destination}</Link>
+            </Field>
+            <Field label="شركة النقل">
+              <Link to={`/companies/${b.trip.company.id}`} className={linkCls}>{b.trip.company.name}</Link>
+            </Field>
             <Field label="موعد المغادرة">{formatDateTime(b.trip.departureAt)}</Field>
             <Field label="معرّف الرحلة"><span className="font-mono text-xs" dir="ltr">{b.trip.id}</span></Field>
           </dl>
@@ -219,16 +319,24 @@ export const BookingDetailsPage: React.FC = () => {
         {b.channel === 'BROKER' ? (
           <Section title="مكتب الوكيل" icon="storefront">
             <dl>
-              <Field label="المكتب">{b.office ? `${b.office.name} (${b.office.code})` : '—'}</Field>
+              <Field label="المكتب">
+                {b.office ? <Link to={`/brokers/${b.office.id}`} className={linkCls}>{b.office.name} ({b.office.code})</Link> : '—'}
+              </Field>
               <Field label="الموظف المنفّذ">{b.employee?.displayName ?? '—'}</Field>
-              <Field label="القناة">مكتب وكيل</Field>
+              <Field label="القناة">{CHANNEL_LABEL[b.channel]}</Field>
             </dl>
           </Section>
         ) : (
           <Section title="العميل" icon="person">
             <dl>
-              <Field label="القناة">تطبيق العميل</Field>
-              <Field label="اسم العميل">{b.customer?.displayName ?? '—'}</Field>
+              <Field label="القناة">{CHANNEL_LABEL[b.channel]}</Field>
+              <Field label="اسم العميل">
+                {b.customerId ? (
+                  <Link to={`/travelers/${b.customerId}`} className={linkCls}>{b.customer?.displayName ?? 'عرض الحساب'}</Link>
+                ) : (
+                  b.customer?.displayName ?? '—'
+                )}
+              </Field>
               <Field label="هاتف العميل"><span className="font-mono text-xs" dir="ltr">{b.customer?.phone ?? '—'}</span></Field>
               <Field label="معرّف العميل"><span className="font-mono text-xs" dir="ltr">{b.customer?.id ?? b.customerId ?? '—'}</span></Field>
             </dl>
@@ -260,16 +368,20 @@ export const BookingDetailsPage: React.FC = () => {
         </Section>
       </div>
 
+      <ChangesSection booking={b} />
+
       <Section title={`الركاب والتذاكر (${b.passengers.length})`} icon="confirmation_number">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>الراكب</TableHead>
+              <TableHead>الجنس</TableHead>
               <TableHead>الهاتف</TableHead>
               <TableHead>رقم الهوية</TableHead>
               <TableHead>المقعد</TableHead>
               <TableHead>رقم التذكرة</TableHead>
               <TableHead>حالة التذكرة</TableHead>
+              <TableHead>الصعود</TableHead>
               <TableHead>التذكرة</TableHead>
             </TableRow>
           </TableHeader>
@@ -278,6 +390,7 @@ export const BookingDetailsPage: React.FC = () => {
               (tickets.length ? tickets : [null]).map((t, i) => (
                 <TableRow key={t?.id ?? passenger.id}>
                   <TableCell>{i === 0 ? passenger.fullName : ''}</TableCell>
+                  <TableCell>{i === 0 ? (passenger.gender ? GENDER_LABEL[passenger.gender] : '—') : ''}</TableCell>
                   <TableCell dir="ltr" className="text-right">{i === 0 ? passenger.phone ?? '—' : ''}</TableCell>
                   <TableCell>{i === 0 ? passenger.idNumber ?? '—' : ''}</TableCell>
                   <TableCell>{t?.seatLabel ?? '—'}</TableCell>
@@ -291,6 +404,15 @@ export const BookingDetailsPage: React.FC = () => {
                       '—'
                     )}
                   </TableCell>
+                  <TableCell>
+                    {t?.boardingStatus ? (
+                      <Badge variant={t.boardingStatus === 'BOARDED' ? 'success' : t.boardingStatus === 'NO_SHOW' ? 'error' : 'neutral'}>
+                        {BOARDING_STATUS_LABEL[t.boardingStatus] ?? t.boardingStatus}
+                      </Badge>
+                    ) : (
+                      '—'
+                    )}
+                  </TableCell>
                   <TableCell>{t ? <TicketDownloadButton bookingId={b.id} ticketNumber={t.ticketNumber} /> : null}</TableCell>
                 </TableRow>
               )),
@@ -298,6 +420,15 @@ export const BookingDetailsPage: React.FC = () => {
           </TableBody>
         </Table>
       </Section>
+
+      <RefundsSection booking={b} />
+
+      <NotDeletableNote>
+        الحجوزات لا تُحذف للحفاظ على السجل المالي والتذاكر الصادرة. الإجراء الآمن هو <strong>إلغاء الحجز</strong>
+        {b.channel === 'BROKER'
+          ? ' (يعيد كامل المبلغ لمحفظة المكتب ويسترد العمولة).'
+          : '. حجوزات تطبيق العميل يلغيها العميل من التطبيق ويُسترد المبلغ لوسيلة الدفع الأصلية.'}
+      </NotDeletableNote>
 
       {/* Stays mounted after a successful cancel (status flips to CANCELLED) so the result remains visible. */}
       {cancelAllowed && <CancelBookingModal booking={b} open={cancelOpen} onOpenChange={setCancelOpen} />}

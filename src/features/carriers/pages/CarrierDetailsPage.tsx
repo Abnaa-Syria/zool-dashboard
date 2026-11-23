@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
+import { DeleteEntityDialog } from '../../../components/shared/DeleteEntityDialog';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { ErrorState } from '../../../components/ui/EmptyState';
@@ -9,9 +10,10 @@ import { Skeleton } from '../../../components/ui/Skeleton';
 import { errorMessage } from '../../../lib/api/errors';
 import { formatDateTime } from '../../../lib/dates';
 import { useAuth } from '../../auth/auth-context';
-import { CARRIER_STATUS_LABEL, useCarrier } from '../api';
+import { CARRIER_STATUS_LABEL, useCarrier, useDeleteCarrier, useUpdateCarrier } from '../api';
 import { AffectedTripsSection } from '../components/AffectedTripsSection';
 import { BillingSection } from '../components/BillingSection';
+import { CarrierRelatedSections } from '../components/CarrierRelatedSections';
 import { CarrierStaffSection } from '../components/CarrierStaffSection';
 import { CarrierStatusModal } from '../components/CarrierStatusModal';
 import { EditCarrierModal } from '../components/EditCarrierModal';
@@ -29,6 +31,10 @@ export const CarrierDetailsPage: React.FC = () => {
   const carrier = useCarrier(id);
   const [editOpen, setEditOpen] = React.useState(false);
   const [statusOpen, setStatusOpen] = React.useState(false);
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const navigate = useNavigate();
+  const remove = useDeleteCarrier();
+  const update = useUpdateCarrier(id ?? '');
   const c = carrier.data;
 
   return (
@@ -61,6 +67,7 @@ export const CarrierDetailsPage: React.FC = () => {
                   ) : (
                     <Button icon="check_circle" onClick={() => setStatusOpen(true)}>إعادة التفعيل</Button>
                   )}
+                  <Button variant="outline" icon="delete" className="text-error" onClick={() => setDeleteOpen(true)}>حذف</Button>
                 </>
               ) : null
             }
@@ -105,8 +112,28 @@ export const CarrierDetailsPage: React.FC = () => {
 
           <AffectedTripsSection companyId={c.id} suspended={c.status === 'SUSPENDED'} />
 
+          <CarrierRelatedSections companyId={c.id} />
+
           {editOpen && <EditCarrierModal carrier={c} open onOpenChange={setEditOpen} />}
           <CarrierStatusModal carrier={c} open={statusOpen} onOpenChange={setStatusOpen} />
+          <DeleteEntityDialog
+            open={deleteOpen}
+            onOpenChange={setDeleteOpen}
+            entityLabel="شركة النقل"
+            name={c.name}
+            description={<p>يُحذف معها حسابات بوابة الشركة. لا يُسمح بالحذف إذا كانت لها رحلات أو مسارات أو حافلات أو سائقون أو إسنادات أو تسويات.</p>}
+            onDelete={() => remove.mutateAsync(c.id)}
+            onDeleted={() => navigate('/companies', { replace: true })}
+            alternative={
+              c.status === 'ACTIVE'
+                ? {
+                    label: 'إيقاف الشركة',
+                    description: 'إيقاف الشركة يوقف البيع فورًا ويحرّر المقاعد المؤقتة مع الإبقاء على كل السجلات والحجوزات المؤكدة.',
+                    run: () => update.mutateAsync({ status: 'SUSPENDED' }),
+                  }
+                : undefined
+            }
+          />
         </>
       ) : null}
     </div>

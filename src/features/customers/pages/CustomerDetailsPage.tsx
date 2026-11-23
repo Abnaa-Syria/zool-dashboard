@@ -9,6 +9,7 @@ import { Skeleton } from '../../../components/ui/Skeleton';
 import { errorMessage } from '../../../lib/api/errors';
 import { formatDateTime } from '../../../lib/dates';
 import { ConfirmDialog, Section } from '../../admin/components/AdminUi';
+import { RelatedBookingsTable } from '../../bookings/components/RelatedBookingsTable';
 import { useAuth } from '../../auth/auth-context';
 import {
   CUSTOMER_STATUS_LABEL,
@@ -16,6 +17,7 @@ import {
   DEFAULT_CASH_NO_SHOW_LIMIT,
   useCashNoShowLimit,
   useCustomer,
+  useDeleteCustomer,
   useUpdateCustomer,
   type CustomerDetail,
 } from '../api';
@@ -34,18 +36,22 @@ const Stat: React.FC<{ label: string; value: number; tone?: string }> = ({ label
   </div>
 );
 
-type Action = 'suspend' | 'reactivate' | 'reset' | null;
+type Action = 'suspend' | 'reactivate' | 'reset' | 'delete' | null;
 
 const CustomerActions: React.FC<{ customer: CustomerDetail; action: Action; onClose: () => void }> = ({ customer, action, onClose }) => {
   const update = useUpdateCustomer(customer.id);
+  const remove = useDeleteCustomer(customer.id);
   const close = (open: boolean) => {
     if (!open) {
       update.reset();
+      remove.reset();
       onClose();
     }
   };
   const run = () =>
-    update.mutate(
+    action === 'delete'
+      ? remove.mutate(undefined, { onSuccess: () => close(false) })
+      : update.mutate(
       action === 'reset' ? { resetCashNoShows: true } : { status: action === 'suspend' ? 'SUSPENDED' : 'ACTIVE' },
       { onSuccess: () => close(false) },
     );
@@ -77,6 +83,19 @@ const CustomerActions: React.FC<{ customer: CustomerDetail; action: Action; onCl
       confirm: 'تصفير العدّاد',
       danger: false,
     },
+    delete: {
+      title: `حذف حساب ${name}؟`,
+      description: (
+        <ul className="list-disc pr-5 space-y-1">
+          <li>تُمسح البيانات الشخصية نهائيًا: الاسم والهاتف والبريد والصورة وعمليات البحث الأخيرة وأجهزة الإشعارات.</li>
+          <li>تُلغى كل جلسات العميل ولن يتمكن من الدخول بهذا الحساب مرة أخرى (يمكنه التسجيل من جديد برقمه كحساب جديد).</li>
+          <li>الحجوزات والتذاكر والمدفوعات تبقى في السجل المالي دون بيانات الحساب.</li>
+          <li>غير مسموح إذا كانت لديه حجوزات على رحلات قادمة — ألغِها أولًا. لا يمكن التراجع.</li>
+        </ul>
+      ),
+      confirm: 'حذف الحساب',
+      danger: true,
+    },
   } as const;
 
   if (!action) return null;
@@ -90,8 +109,8 @@ const CustomerActions: React.FC<{ customer: CustomerDetail; action: Action; onCl
       confirmText={c.confirm}
       danger={c.danger}
       onConfirm={run}
-      isLoading={update.isPending}
-      error={update.isError ? errorMessage(update.error) : null}
+      isLoading={update.isPending || remove.isPending}
+      error={update.isError ? errorMessage(update.error) : remove.isError ? errorMessage(remove.error) : null}
     />
   );
 };
@@ -130,11 +149,14 @@ export const CustomerDetailsPage: React.FC = () => {
             badge={<Badge variant={CUSTOMER_STATUS_VARIANT[c.status]} dot>{CUSTOMER_STATUS_LABEL[c.status]}</Badge>}
             actions={
               canManage && c.status !== 'DELETED' ? (
-                c.status === 'ACTIVE' ? (
-                  <Button variant="danger" icon="block" onClick={() => setAction('suspend')}>إيقاف الحساب</Button>
-                ) : (
-                  <Button icon="check_circle" onClick={() => setAction('reactivate')}>إعادة التفعيل</Button>
-                )
+                <div className="flex flex-wrap gap-2">
+                  {c.status === 'ACTIVE' ? (
+                    <Button variant="outline" icon="block" onClick={() => setAction('suspend')}>إيقاف الحساب</Button>
+                  ) : (
+                    <Button icon="check_circle" onClick={() => setAction('reactivate')}>إعادة التفعيل</Button>
+                  )}
+                  <Button variant="danger" icon="person_remove" onClick={() => setAction('delete')}>حذف الحساب</Button>
+                </div>
               ) : null
             }
           />
@@ -146,7 +168,7 @@ export const CustomerDetailsPage: React.FC = () => {
           )}
           {c.status === 'DELETED' && (
             <div className="rounded-xl border border-outline-variant/40 bg-surface-container p-space-md text-sm">
-              الحساب محذوف بطلب العميل ولا يمكن تعديله.
+              الحساب محذوف (أُزيلت بياناته الشخصية) ولا يمكن تعديله. حجوزاته باقية في السجل.
             </div>
           )}
 
@@ -167,9 +189,7 @@ export const CustomerDetailsPage: React.FC = () => {
               <Stat label="مؤكدة" value={c.bookings.confirmed} tone="text-[#15803D]" />
               <Stat label="ملغاة" value={c.bookings.cancelled} tone="text-error" />
             </div>
-            <p className="text-xs text-on-surface-variant">
-              قائمة حجوزات العميل غير متاحة بعد: واجهة الحجوزات الإدارية لا تدعم التصفية حسب العميل.
-            </p>
+            <RelatedBookingsTable scope={{ customerId: c.id }} emptyText="لا توجد حجوزات لهذا الحساب." hide={['office']} />
           </Section>
 
           <Section

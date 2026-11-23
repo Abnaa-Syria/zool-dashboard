@@ -24,12 +24,12 @@ import { BusyTripsList, Field, selectClass } from './fields';
 const dateInput = 'h-10 rounded-lg border border-outline-variant/60 bg-surface-container-lowest px-3 text-sm font-normal';
 
 /** POST /admin/trips/schedule: route → vehicle → driver → price → departures (Sudan time). */
-export const ScheduleTripsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+export const ScheduleTripsModal: React.FC<{ onClose: () => void; initialRouteId?: string }> = ({ onClose, initialRouteId }) => {
   const routes = useActiveRoutes();
   const schedule = useScheduleTrips();
   const [tomorrow] = React.useState(() => sudanDate(new Date(Date.now() + 86_400_000)));
 
-  const [routeId, setRouteId] = React.useState('');
+  const [routeId, setRouteId] = React.useState(initialRouteId ?? '');
   const [vehicleId, setVehicleId] = React.useState('');
   const [driverId, setDriverId] = React.useState('');
   const [price, setPrice] = React.useState('');

@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Link } from 'react-router-dom';
+import { NotDeletableNote } from '../../../components/shared/DetailFields';
 import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
@@ -74,6 +75,10 @@ export const TopUpQueuePage: React.FC = () => {
         subtitle="طلبات الشحن اليدوية المرفقة بإيصال تحويل. الاعتماد يضيف المبلغ المقدَّم كما هو إلى محفظة المكتب؛ لا يمكن تعديل المبلغ."
         className="mb-0"
       />
+
+      <NotDeletableNote>
+        طلبات الشحن سجل مالي ولا تُحذف: الطلب غير الصحيح يُرفض مع ملاحظة، والمعتمد نهائي. تفاصيل المحفظة وحركاتها في صفحة المكتب.
+      </NotDeletableNote>
 
       <div className="flex flex-wrap items-center gap-space-sm">
         <select aria-label="الحالة" value={status} onChange={(e) => setStatus(e.target.value as TopUpStatus | '')} className={selectClass}>

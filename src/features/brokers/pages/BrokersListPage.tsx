@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Breadcrumbs } from '../../../app/shell/Breadcrumbs';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
@@ -18,6 +18,7 @@ import { useDebouncedValue } from '../useDebouncedValue';
 const PAGE_SIZE = 20;
 
 export const BrokersListPage: React.FC = () => {
+  const navigate = useNavigate();
   const { can } = useAuth();
   const [search, setSearch] = React.useState('');
   const q = useDebouncedValue(search.trim(), 300);
@@ -86,13 +87,14 @@ export const BrokersListPage: React.FC = () => {
                   <th className="py-2 px-2 font-medium">دورة التسوية</th>
                   <th className="py-2 px-2 font-medium">الحالة</th>
                   <th className="py-2 px-2 font-medium">تاريخ الإضافة</th>
+                  <th className="py-2 px-2" />
                 </tr>
               </thead>
               <tbody>
                 {rows.map((o) => (
-                  <tr key={o.id} className="border-t border-surface-container hover:bg-surface-container/50">
+                  <tr key={o.id} className="border-t border-surface-container hover:bg-surface-container/50 cursor-pointer" onClick={() => navigate(`/brokers/${o.id}`)}>
                     <td className="py-2 px-2">
-                      <Link to={`/brokers/${o.id}`} className="font-semibold text-secondary">{o.name}</Link>
+                      <Link to={`/brokers/${o.id}`} className="font-semibold text-secondary" onClick={(e) => e.stopPropagation()}>{o.name}</Link>
                     </td>
                     <td className="py-2 px-2 font-mono text-xs" dir="ltr">{o.code}</td>
                     <td className="py-2 px-2 tabular-nums">{formatSdg(o.wallet?.balanceMinor)}</td>
@@ -101,6 +103,9 @@ export const BrokersListPage: React.FC = () => {
                       <Badge variant={o.status === 'ACTIVE' ? 'success' : 'error'} dot>{OFFICE_STATUS_LABEL[o.status]}</Badge>
                     </td>
                     <td className="py-2 px-2 text-on-surface-variant">{formatDateTime(o.createdAt)}</td>
+                    <td className="py-2 px-2 text-left">
+                      <Link to={`/brokers/${o.id}`} className="text-secondary font-medium" onClick={(e) => e.stopPropagation()}>عرض</Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>
