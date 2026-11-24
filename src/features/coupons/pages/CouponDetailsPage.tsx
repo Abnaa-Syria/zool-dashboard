@@ -126,6 +126,28 @@ export const CouponDetailsPage: React.FC = () => {
         </p>
       </Section>
 
+      <Section title="العرض في تطبيق العميل">
+        <FieldGrid>
+          <Field label="يظهر كبانر">{c.showInApp ? 'نعم، في الصفحة الرئيسية للتطبيق' : 'لا'}</Field>
+          {c.showInApp && (
+            <>
+              <Field label="العنوان">{c.promoTitleAr ?? 'تلقائي من قيمة الخصم'}</Field>
+              <Field label="الوصف">{c.promoSubtitleAr ?? '—'}</Field>
+              <Field label="ترتيب الظهور">{c.promoSortOrder}</Field>
+              <Field label="الصورة">
+                {c.promoImageUrl ? (
+                  <a href={c.promoImageUrl} target="_blank" rel="noreferrer" className="text-secondary hover:underline" dir="ltr">
+                    عرض الصورة
+                  </a>
+                ) : (
+                  'التصميم الافتراضي'
+                )}
+              </Field>
+            </>
+          )}
+        </FieldGrid>
+      </Section>
+
       {modal === 'edit' && <EditCouponModal key={c.id} coupon={c} onClose={() => setModal(null)} />}
       <ConfirmDialog
         open={modal === 'toggle'}

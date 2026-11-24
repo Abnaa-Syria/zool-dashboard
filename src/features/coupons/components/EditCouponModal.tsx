@@ -6,6 +6,8 @@ import { errorMessage } from '../../../lib/api/errors';
 import { formatDateTime } from '../../../lib/dates';
 import { useUpdateCoupon, type Coupon, type CouponPatch } from '../api';
 import { isoToSudanLocal, parsePositiveInt, sudanLocalToIso } from '../convert';
+import { promoDraftOf, promoErrors, promoPatch } from '../promo';
+import { PromoFields } from './PromoFields';
 
 /**
  * PATCH /admin/coupons/:id — only isActive, validTo and maxRedemptions are editable.
@@ -16,6 +18,7 @@ export const EditCouponModal: React.FC<{ coupon: Coupon; onClose: () => void }> 
   const [isActive, setIsActive] = React.useState(coupon.isActive);
   const [validTo, setValidTo] = React.useState(isoToSudanLocal(coupon.validTo));
   const [maxRedemptions, setMaxRedemptions] = React.useState(coupon.maxRedemptions?.toString() ?? '');
+  const [promo, setPromo] = React.useState(() => promoDraftOf(coupon));
 
   const fromLocal = isoToSudanLocal(coupon.validFrom);
   const parsedMax = parsePositiveInt(maxRedemptions);
@@ -34,8 +37,9 @@ export const EditCouponModal: React.FC<{ coupon: Coupon; onClose: () => void }> 
   if (validTo && validTo !== isoToSudanLocal(coupon.validTo)) patch.validTo = sudanLocalToIso(validTo);
   const nextMax = parsedMax ?? null;
   if (parsedMax !== null && nextMax !== coupon.maxRedemptions) patch.maxRedemptions = nextMax;
+  Object.assign(patch, promoPatch(promo, coupon));
   const dirty = Object.keys(patch).length > 0;
-  const valid = !errors.validTo && !errors.max;
+  const valid = !errors.validTo && !errors.max && Object.keys(promoErrors(promo)).length === 0;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,13 +49,13 @@ export const EditCouponModal: React.FC<{ coupon: Coupon; onClose: () => void }> 
 
   return (
     <Modal open onOpenChange={(o) => !o && onClose()}>
-      <ModalContent>
+      <ModalContent size="lg" className="max-h-[90vh] overflow-y-auto">
         <form onSubmit={submit} className="grid gap-4">
           <ModalHeader>
             <ModalTitle>
               تعديل الكوبون <span dir="ltr" className="font-mono">{coupon.code}</span>
             </ModalTitle>
-            <ModalDescription>يمكن تغيير التفعيل وتاريخ الانتهاء وأقصى عدد استخدامات فقط. الأوقات بتوقيت السودان.</ModalDescription>
+            <ModalDescription>يمكن تغيير التفعيل وتاريخ الانتهاء وأقصى عدد الاستخدامات وعرضه في التطبيق. الأوقات بتوقيت السودان.</ModalDescription>
           </ModalHeader>
 
           <label className="flex items-center gap-2 text-sm">
@@ -73,6 +77,8 @@ export const EditCouponModal: React.FC<{ coupon: Coupon; onClose: () => void }> 
             error={errors.max}
             hint={`فارغ = بلا حد. استُخدم ${coupon.redeemedCount} مرة حتى الآن، ولا يمكن خفض الحد عن ذلك.`}
           />
+
+          <PromoFields value={promo} onChange={setPromo} />
 
           {update.isError && <p className="text-xs text-error">{errorMessage(update.error)}</p>}
           <ModalFooter>

@@ -7,6 +7,8 @@ import { formatSdg } from '../../../lib/money';
 import type { CarrierListItem } from '../../carriers/api';
 import { CODE_RE, useCreateCoupon, type DiscountType } from '../api';
 import { parsePositive, parsePositiveInt, parseSdgToMinor, percentToBasisPoints, sdgToMinor, sudanLocalToIso } from '../convert';
+import { EMPTY_PROMO, promoErrors, promoInput, type PromoDraft } from '../promo';
+import { PromoFields } from './PromoFields';
 
 const selectCls = 'h-10 w-full rounded-lg border border-outline-variant/60 bg-surface-container-lowest px-3 text-sm';
 
@@ -32,6 +34,7 @@ export const CreateCouponModal: React.FC<{
 }> = ({ open, onOpenChange, carriers, carriersUnavailable }) => {
   const create = useCreateCoupon();
   const [f, setF] = React.useState(EMPTY);
+  const [promo, setPromo] = React.useState<PromoDraft>(EMPTY_PROMO);
   const set = <K extends keyof typeof EMPTY>(k: K, v: (typeof EMPTY)[K]) => setF((prev) => ({ ...prev, [k]: v }));
 
   const isPercent = f.discountType === 'PERCENT';
@@ -70,6 +73,7 @@ export const CreateCouponModal: React.FC<{
   const close = (next: boolean) => {
     if (!next) {
       setF(EMPTY);
+      setPromo(EMPTY_PROMO);
       create.reset();
     }
     onOpenChange(next);
@@ -90,6 +94,7 @@ export const CreateCouponModal: React.FC<{
         validTo: sudanLocalToIso(f.validTo),
         ...(maxRedemptions ? { maxRedemptions } : {}),
         ...(perCustomer ? { perCustomerLimit: perCustomer } : {}),
+        ...(promo.showInApp ? promoInput(promo) : {}),
       },
       { onSuccess: () => close(false) },
     );
@@ -148,10 +153,12 @@ export const CreateCouponModal: React.FC<{
             <Input label="الحد لكل عميل" type="number" min={1} max={100} step={1} dir="ltr" value={f.perCustomerLimit} onChange={(e) => set('perCustomerLimit', e.target.value)} error={errors.perCustomer} hint="الافتراضي 1" />
           </div>
 
+          <PromoFields value={promo} onChange={setPromo} />
+
           {create.isError && <p className="text-xs text-error">{errorMessage(create.error)}</p>}
           <ModalFooter>
             <Button type="button" variant="outline" onClick={() => close(false)}>إلغاء</Button>
-            <Button type="submit" disabled={!valid} isLoading={create.isPending}>إنشاء</Button>
+            <Button type="submit" disabled={!valid || Object.keys(promoErrors(promo)).length > 0} isLoading={create.isPending}>إنشاء</Button>
           </ModalFooter>
         </form>
       </ModalContent>

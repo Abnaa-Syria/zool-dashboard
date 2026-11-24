@@ -20,7 +20,21 @@ export type Coupon = {
   perCustomerLimit: number;
   redeemedCount: number;
   isActive: boolean;
+  /** D-PROMO-01: shown as a banner on the customer app home while valid. */
+  showInApp: boolean;
+  promoTitleAr: string | null;
+  promoSubtitleAr: string | null;
+  promoImageUrl: string | null;
+  promoSortOrder: number;
   createdAt: string;
+};
+
+export type PromoInput = {
+  showInApp: boolean;
+  promoTitleAr: string | null;
+  promoSubtitleAr: string | null;
+  promoImageUrl: string | null;
+  promoSortOrder: number;
 };
 
 export type CouponFilters = { page?: number; pageSize?: number; q?: string; isActive?: 'true' | 'false' };
@@ -36,9 +50,9 @@ export type CreateCouponInput = {
   validTo: string;
   maxRedemptions?: number;
   perCustomerLimit?: number;
-};
+} & Partial<PromoInput>;
 
-export type CouponPatch = { isActive?: boolean; validTo?: string; maxRedemptions?: number | null };
+export type CouponPatch = { isActive?: boolean; validTo?: string; maxRedemptions?: number | null } & Partial<PromoInput>;
 
 export const couponKeys = {
   all: ['admin-coupons'] as const,
