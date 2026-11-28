@@ -168,6 +168,7 @@ export const SETTING_LABEL: Record<string, string> = {
   'booking.customerMaxHeldSeats': 'أقصى مقاعد محجوزة مؤقتًا للعميل في كل الرحلات معًا',
   'driver.boardingWindowMinutes': 'فتح الصعود قبل الانطلاق (دقيقة)',
   'maps.maptilerKey': 'مفتاح خرائط MapTiler (فارغ = OpenStreetMap)',
+  'maps.maptilerMapId': 'معرّف خريطة MapTiler (streets-v2 أو خريطة معدّلة بالعربي)',
   'support.phone': 'رقم هاتف الدعم',
   'support.whatsapp': 'رقم واتساب الدعم',
   'support.email': 'بريد الدعم',
