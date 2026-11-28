@@ -2,7 +2,7 @@ import * as React from 'react';
 import L from 'leaflet';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import { cn } from '../../../lib/utils';
-import { MAP_CONFIG } from '../mapConfig';
+import { MAP_CONFIG, useMapTiles } from '../mapConfig';
 import { MapControls } from './MapControls';
 
 export type LatLng = [number, number];
@@ -62,6 +62,7 @@ export const TrackingMap: React.FC<TrackingMapProps> = ({ fitPoints, fitTitle = 
   const fitRef = React.useRef<() => void>(() => {});
   const [isFullscreen, setIsFullscreen] = React.useState(false);
   const [tileError, setTileError] = React.useState(false);
+  const tiles = useMapTiles();
 
   React.useEffect(() => {
     const sync = () => setIsFullscreen(document.fullscreenElement === containerRef.current);
@@ -98,7 +99,7 @@ export const TrackingMap: React.FC<TrackingMapProps> = ({ fitPoints, fitTitle = 
         className="w-full h-full select-none"
         zoomControl={false}
       >
-        <TileLayer url={MAP_CONFIG.tileUrl} attribution={MAP_CONFIG.attribution} eventHandlers={{ tileerror: () => setTileError(true) }} />
+        {tiles && <TileLayer key={tiles.url} url={tiles.url} attribution={tiles.attribution} maxZoom={tiles.maxZoom} eventHandlers={{ tileerror: () => setTileError(true) }} />}
         {children}
         <FitController points={fitPoints} fitRef={fitRef} />
         <SizeInvalidator token={isFullscreen} />
